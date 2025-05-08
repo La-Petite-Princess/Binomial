@@ -1,65 +1,69 @@
 # Binomial
-需要优化的代码
-https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/Binomial.m
+旧代码
+https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/Binomial_old.m
 
-第一部分
+第一部分 配置文件模块 (BinomialConfig)
 https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/BinomialConfig.m
 
-第二部分
+第二部分 日志管理模块 (BinomialLogger)
 https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/BinomialLogger.m
 
-第三部分
+第三部分 主分析器类 (BinomialAnalyzer)
 https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/BinomialAnalyzer.m
 
-第四部分
+第四部分 数据管理模块 (DataManager)
 https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/DataManager.m
 
-第五部分
+第五部分 并行计算管理模块 (ParallelManager)
 https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/ParallelManager.m
 
-第六部分
+第六部分 GPU管理模块 (GPUManager)
 https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/GPUManager.m
 
-第七部分
+第七部分 多重共线性检查模块 (CollinearityChecker)
 https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/CollinearityChecker.m
 
-第八部分
+第八部分 相关性分析模块 (CorrelationAnalyzer)
 https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/CorrelationAnalyzer.m
 
-第九部分
+第九部分 Bootstrap采样模块 (BootstrapSampler)
 https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/BootstrapSampler.m
 
-第十部分
+第十部分 K折交叉验证模块 (CrossValidator)
 https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/CrossValidator.m
 
-第十一部分
+第十一部分 变量选择模块 (VariableSelector)
 https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/VariableSelector.m
 
-第十二部分
+第十二部分 系数稳定性监控模块 (CoefficientStabilityMonitor)
 https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/CoefficientStabilityMonitor.m
 
-第十三部分
+第十三部分 参数统计分析模块 (ParameterStatisticsCalculator)
 https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/ParameterStatisticsCalculator.m
 
-第十四部分
+第十四部分 变量贡献评估模块 (VariableContributionEvaluator)
 https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/VariableContributionEvaluator.m
 
-第十五部分
+第十五部分 残差分析模块 (ResidualAnalyzer)
 https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/ResidualAnalyzer.m
 
-第十六部分
+第十六部分 结果可视化模块 (ResultVisualizer)
 https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/ResultVisualizer.m
 
-第十七部分
+第十七部分 结果保存模块 (ResultSaver)
 https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/ResultSaver.m
 
-第十八部分
+第十八部分 报告生成模块 (ReportGenerator)
 https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/ReportGenerator.m
 
-第十九部分
+第十九部分 主执行函数 (Binomial)
 https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/Binomial.m
 
-第二十部分
+
+
+
+
+
 https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/README.md
 
 
@@ -87,7 +91,6 @@ https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/README.md
 我需要先获取GitHub上的代码，看一下具体的内容，然后根据用户的要求进行优化。
 首先，我需要使用web_fetch工具获取代码内容。
 
-用户想让我继续优化代码。我已经完成了前9个模块：
 
 配置文件模块 (BinomialConfig)
 日志管理模块 (BinomialLogger)

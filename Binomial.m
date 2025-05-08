@@ -182,25 +182,15 @@ try
     t_end = toc;
     log_message('info', sprintf('残差分析完成，耗时：%.2f秒', t_end - t_start));
     
-    % 13. 创建所有可视化图表 - 现在使用优化后的图形保存函数，不再单独记录每个图表
+    % 13. 删除这部分原有内容，替换为:
     t_start = toc;
-    
-    create_boxplot_visualization(results, methods, figure_dir);
-    create_pr_curves(results, methods, figure_dir);
-    create_calibration_curves(results, methods, figure_dir);
-    create_confusion_matrices(results, methods, figure_dir);
-    create_roc_curves(results, methods, figure_dir);
-    create_variable_importance_plot(results, methods, var_names(~removed_vars), figure_dir);
-    create_variable_group_plot(results, methods, var_names(~removed_vars), figure_dir);
-    create_coefficient_stability_plot(coef_stability, methods, figure_dir);
-    create_variable_contribution_plot(var_contribution, figure_dir);
-    
+    log_message('info', '开始准备可视化数据');
     t_end = toc;
-    log_message('info', sprintf('所有可视化图表创建完成，耗时：%.2f秒', t_end - t_start));
+    log_message('info', sprintf('可视化数据准备完成，耗时：%.2f秒', t_end - t_start));
     
     % 14. 保存结果
     t_start = toc;
-    save_enhanced_results(results, var_names(~removed_vars), group_means, cv_results, coef_stability, param_stats, var_contribution);
+    save_enhanced_results(results, var_names, group_means, cv_results, coef_stability, param_stats, var_contribution);
     t_end = toc;
     log_message('info', sprintf('结果保存完成，耗时：%.2f秒', t_end - t_start));
     
@@ -2836,204 +2826,341 @@ end
 
 %% 保存增强结果函数 - 新增
 function save_enhanced_results(results, var_names, group_means, cv_results, coef_stability, param_stats, var_contribution)
-% 保存分析结果，包括变量组合信息、交叉验证结果、系数稳定性、参数统计和变量贡献
-% 输入:
-%   results - 结果结构
-%   var_names - 变量名称
-%   group_means - 分组均值
-%   cv_results - 交叉验证结果
-%   coef_stability - 系数稳定性
-%   param_stats - 参数统计
-%   var_contribution - 变量贡献
+    % 保存分析结果，包括变量组合信息、交叉验证结果、系数稳定性、参数统计和变量贡献
+    % 输入:
+    %   results - 结果结构
+    %   var_names - 变量名称
+    %   group_means - 分组均值
+    %   cv_results - 交叉验证结果
+    %   coef_stability - 系数稳定性
+    %   param_stats - 参数统计
+    %   var_contribution - 变量贡献
 
-% 从results结构中获取方法名称
-methods = fieldnames(results);
+    % 从results结构中获取方法名称
+    methods = fieldnames(results);
 
-% 创建高级结果目录
-result_dir = fullfile('results');
-if ~exist(result_dir, 'dir')
-    mkdir(result_dir);
-end
-
-% 保存时间戳
-timestamp = datestr(now, 'yyyymmdd_HHMMSS');
-result_mat = fullfile(result_dir, sprintf('enhanced_analysis_%s.mat', timestamp));
-
-% 保存原始结果 - 使用-v7.3支持大文件
-save(result_mat, 'results', 'var_names', 'group_means', 'cv_results', ...
-     'coef_stability', 'param_stats', 'var_contribution', '-v7.3');
-log_message('info', sprintf('增强分析结果已保存至 %s', result_mat));
-
-% 创建CSV结果目录
-csv_dir = fullfile(result_dir, 'csv');
-if ~exist(csv_dir, 'dir')
-    mkdir(csv_dir);
-end
-
-% 创建图形结果目录
-figure_dir = fullfile(result_dir, 'figures');
-if ~exist(figure_dir, 'dir')
-    mkdir(figure_dir);
-end
-
-% 创建报告目录
-report_dir = fullfile(result_dir, 'reports');
-if ~exist(report_dir, 'dir')
-    mkdir(report_dir);
-end
-
-% 创建AIC和BIC比较表
-try
-    aic_bic_table = create_aic_bic_table(results, methods);
-    writetable(aic_bic_table, fullfile(csv_dir, 'aic_bic_comparison.csv'));
-    log_message('info', 'AIC和BIC比较表已保存');
-catch ME
-    log_message('error', sprintf('创建AIC和BIC比较表时出错: %s', ME.message));
-end
-
-% 创建变量选择频率表
-try
-    var_freq_table = create_var_freq_table(results, methods, var_names);
-    writetable(var_freq_table, fullfile(csv_dir, 'variable_selection_frequency.csv'));
-    log_message('info', '变量选择频率表已保存');
-catch ME
-    log_message('error', sprintf('创建变量选择频率表时出错: %s', ME.message));
-end
-
-% 创建模型性能表（增强版，包括均值和标准差）
-try
-    perf_detail_table = create_performance_detail_table(results, methods);
-    writetable(perf_detail_table, fullfile(csv_dir, 'model_performance_detailed.csv'));
-    log_message('info', '详细模型性能表已保存');
-catch ME
-    log_message('error', sprintf('创建详细模型性能表时出错: %s', ME.message));
-end
-% 创建变量组合性能表
-try
-    var_group_table = create_variable_group_table(results, methods);
-    writetable(var_group_table, fullfile(csv_dir, 'variable_group_performance.csv'));
-    log_message('info', '变量组合性能表已保存');
-catch ME
-    log_message('error', sprintf('创建变量组合性能表时出错: %s', ME.message));
-end
-
-% 创建K折交叉验证结果表
-try
-    cv_table = create_cv_results_table(cv_results);
-    writetable(cv_table, fullfile(csv_dir, 'cv_results.csv'));
-    log_message('info', 'K折交叉验证结果表已保存');
-catch ME
-    log_message('error', sprintf('创建K折交叉验证结果表时出错: %s', ME.message));
-end
-
-% 创建系数稳定性表
-try
-    for m = 1:length(methods)
-        method = methods{m};
-        if isfield(coef_stability, method) && isfield(coef_stability.(method), 'table')
-            writetable(coef_stability.(method).table, fullfile(csv_dir, sprintf('%s_coefficient_stability.csv', method)));
-            log_message('info', sprintf('%s方法的系数稳定性表已保存', method));
-        end
+    % 创建高级结果目录
+    result_dir = fullfile('results');
+    if ~exist(result_dir, 'dir')
+        mkdir(result_dir);
     end
-catch ME
-    log_message('error', sprintf('创建系数稳定性表时出错: %s', ME.message));
-end
 
-% 创建参数统计表
-try
-    for m = 1:length(methods)
-        method = methods{m};
-        if isfield(param_stats, method) && isfield(param_stats.(method), 'table')
-            writetable(param_stats.(method).table, fullfile(csv_dir, sprintf('%s_parameter_statistics.csv', method)));
-            log_message('info', sprintf('%s方法的参数统计表已保存', method));
-        end
-    end
-catch ME
-    log_message('error', sprintf('创建参数统计表时出错: %s', ME.message));
-end
+    % 保存时间戳
+    timestamp = datestr(now, 'yyyymmdd_HHMMSS');
+    result_mat = fullfile(result_dir, sprintf('enhanced_analysis_%s.mat', timestamp));
 
-% 创建变量贡献表
-try
-    % 保存全局重要性表
-    if isfield(var_contribution, 'correlation')
-        writetable(var_contribution.correlation, fullfile(csv_dir, 'correlation_importance.csv'));
+    % 保存原始结果 - 使用-v7.3支持大文件
+    try
+        save(result_mat, 'results', 'var_names', 'group_means', 'cv_results', ...
+             'coef_stability', 'param_stats', 'var_contribution', '-v7.3');
+        log_message('info', sprintf('增强分析结果已保存至 %s', result_mat));
+    catch ME
+        log_message('error', sprintf('保存MAT文件时出错: %s', ME.message));
     end
+
+    % 创建CSV结果目录
+    csv_dir = fullfile(result_dir, 'csv');
+    if ~exist(csv_dir, 'dir')
+        mkdir(csv_dir);
+    end
+
+    % 创建图形结果目录
+    figure_dir = fullfile(result_dir, 'figures');
+    if ~exist(figure_dir, 'dir')
+        mkdir(figure_dir);
+    end
+
+    % 创建报告目录
+    report_dir = fullfile(result_dir, 'reports');
+    if ~exist(report_dir, 'dir')
+        mkdir(report_dir);
+    end
+
+    %% 1. 创建CSV统计表
     
-    if isfield(var_contribution, 'logistic')
-        writetable(var_contribution.logistic, fullfile(csv_dir, 'logistic_importance.csv'));
-    end
-    
-    if isfield(var_contribution, 'randomforest')
-        writetable(var_contribution.randomforest, fullfile(csv_dir, 'randomforest_importance.csv'));
-    end
-    
-    if isfield(var_contribution, 'overall_importance')
-        writetable(var_contribution.overall_importance, fullfile(csv_dir, 'overall_importance.csv'));
-    end
-    
-    % 保存方法特定贡献表
-    for m = 1:length(methods)
-        method = methods{m};
-        if isfield(var_contribution, 'methods') && isfield(var_contribution.methods, method) && ...
-           isfield(var_contribution.methods.(method), 'contribution_table')
-            writetable(var_contribution.methods.(method).contribution_table, ...
-                fullfile(csv_dir, sprintf('%s_variable_contribution.csv', method)));
-            log_message('info', sprintf('%s方法的变量贡献表已保存', method));
+    % 创建AIC和BIC比较表
+    file_path = fullfile(csv_dir, 'aic_bic_comparison.csv');
+    if ~exist(file_path, 'file')
+        try
+            aic_bic_table = create_aic_bic_table(results, methods);
+            writetable(aic_bic_table, file_path);
+            log_message('info', 'AIC和BIC比较表已保存');
+        catch ME
+            log_message('error', sprintf('创建AIC和BIC比较表时出错: %s', ME.message));
         end
     end
     
-    log_message('info', '变量贡献表已保存');
-catch ME
-    log_message('error', sprintf('创建变量贡献表时出错: %s', ME.message));
-end
+    % 创建变量选择频率表
+    file_path = fullfile(csv_dir, 'variable_selection_frequency.csv');
+    if ~exist(file_path, 'file')
+        try
+            var_freq_table = create_var_freq_table(results, methods, var_names);
+            writetable(var_freq_table, file_path);
+            log_message('info', '变量选择频率表已保存');
+        catch ME
+            log_message('error', sprintf('创建变量选择频率表时出错: %s', ME.message));
+        end
+    end
+    
+    % 创建模型性能表（增强版，包括均值和标准差）
+    file_path = fullfile(csv_dir, 'model_performance_detailed.csv');
+    if ~exist(file_path, 'file')
+        try
+            perf_detail_table = create_performance_detail_table(results, methods);
+            writetable(perf_detail_table, file_path);
+            log_message('info', '详细模型性能表已保存');
+        catch ME
+            log_message('error', sprintf('创建详细模型性能表时出错: %s', ME.message));
+        end
+    end
+    
+    % 创建变量组合性能表
+    file_path = fullfile(csv_dir, 'variable_group_performance.csv');
+    if ~exist(file_path, 'file')
+        try
+            var_group_table = create_variable_group_table(results, methods);
+            writetable(var_group_table, file_path);
+            log_message('info', '变量组合性能表已保存');
+        catch ME
+            log_message('error', sprintf('创建变量组合性能表时出错: %s', ME.message));
+        end
+    end
+    
+    % 创建K折交叉验证结果表
+    file_path = fullfile(csv_dir, 'cv_results.csv');
+    if ~exist(file_path, 'file')
+        try
+            cv_table = create_cv_results_table(cv_results);
+            writetable(cv_table, file_path);
+            log_message('info', 'K折交叉验证结果表已保存');
+        catch ME
+            log_message('error', sprintf('创建K折交叉验证结果表时出错: %s', ME.message));
+        end
+    end
+    
+    % 创建模型参数表
+    file_path = fullfile(csv_dir, 'model_parameters.csv');
+    if ~exist(file_path, 'file')
+        try
+            param_table = create_parameter_table(results, methods);
+            writetable(param_table, file_path);
+            log_message('info', '模型参数表已保存');
+        catch ME
+            log_message('error', sprintf('创建模型参数表时出错: %s', ME.message));
+        end
+    end
+    
+    % 创建各方法系数稳定性表
+    try
+        for m = 1:length(methods)
+            method = methods{m};
+            file_path = fullfile(csv_dir, sprintf('%s_coefficient_stability.csv', method));
+            if ~exist(file_path, 'file')
+                if isfield(coef_stability, method) && isfield(coef_stability.(method), 'table')
+                    writetable(coef_stability.(method).table, file_path);
+                    log_message('info', sprintf('%s方法的系数稳定性表已保存', method));
+                end
+            end
+        end
+    catch ME
+        log_message('error', sprintf('创建系数稳定性表时出错: %s', ME.message));
+    end
+    
+    % 创建各方法参数统计表
+    try
+        for m = 1:length(methods)
+            method = methods{m};
+            file_path = fullfile(csv_dir, sprintf('%s_parameter_statistics.csv', method));
+            if ~exist(file_path, 'file')
+                if isfield(param_stats, method) && isfield(param_stats.(method), 'table')
+                    writetable(param_stats.(method).table, file_path);
+                    log_message('info', sprintf('%s方法的参数统计表已保存', method));
+                end
+            end
+        end
+    catch ME
+        log_message('error', sprintf('创建参数统计表时出错: %s', ME.message));
+    end
+    
+    % 创建变量贡献相关表
+    try
+        % 保存全局重要性表
+        if isfield(var_contribution, 'correlation')
+            file_path = fullfile(csv_dir, 'correlation_importance.csv');
+            if ~exist(file_path, 'file')
+                writetable(var_contribution.correlation, file_path);
+            end
+        end
+        
+        if isfield(var_contribution, 'logistic')
+            file_path = fullfile(csv_dir, 'logistic_importance.csv');
+            if ~exist(file_path, 'file')
+                writetable(var_contribution.logistic, file_path);
+            end
+        end
+        
+        if isfield(var_contribution, 'randomforest')
+            file_path = fullfile(csv_dir, 'randomforest_importance.csv');
+            if ~exist(file_path, 'file')
+                writetable(var_contribution.randomforest, file_path);
+            end
+        end
+        
+        if isfield(var_contribution, 'overall_importance')
+            file_path = fullfile(csv_dir, 'overall_importance.csv');
+            if ~exist(file_path, 'file')
+                writetable(var_contribution.overall_importance, file_path);
+            end
+        end
+        
+        % 保存方法特定贡献表
+        for m = 1:length(methods)
+            method = methods{m};
+            file_path = fullfile(csv_dir, sprintf('%s_variable_contribution.csv', method));
+            if ~exist(file_path, 'file')
+                if isfield(var_contribution, 'methods') && isfield(var_contribution.methods, method) && ...
+                   isfield(var_contribution.methods.(method), 'contribution_table')
+                    writetable(var_contribution.methods.(method).contribution_table, file_path);
+                    log_message('info', sprintf('%s方法的变量贡献表已保存', method));
+                end
+            end
+        end
+        
+        log_message('info', '变量贡献表已保存');
+    catch ME
+        log_message('error', sprintf('创建变量贡献表时出错: %s', ME.message));
+    end
 
-% 创建模型参数表
-try
-    param_table = create_parameter_table(results, methods);
-    writetable(param_table, fullfile(csv_dir, 'model_parameters.csv'));
-    log_message('info', '模型参数表已保存');
-catch ME
-    log_message('error', sprintf('创建模型参数表时出错: %s', ME.message));
-end
-
-% 创建可视化图表
-try
+    %% 2. 创建可视化图表
+    
     % ROC曲线图
-    create_roc_curves(results, methods, figure_dir);
-    log_message('info', 'ROC曲线图已保存');
+    figure_path = fullfile(figure_dir, 'roc_curves.svg');
+    if ~exist(figure_path, 'file')
+        try
+            create_roc_curves(results, methods, figure_dir);
+            log_message('info', 'ROC曲线图已保存');
+        catch ME
+            log_message('error', sprintf('创建ROC曲线图时出错: %s', ME.message));
+        end
+    end
     
     % 变量重要性图
-    create_variable_importance_plot(results, methods, var_names, figure_dir);
-    log_message('info', '变量重要性图已保存');
+    figure_path = fullfile(figure_dir, 'variable_importance.svg');
+    if ~exist(figure_path, 'file')
+        try
+            create_variable_importance_plot(results, methods, var_names, figure_dir);
+            log_message('info', '变量重要性图已保存');
+        catch ME
+            log_message('error', sprintf('创建变量重要性图时出错: %s', ME.message));
+        end
+    end
     
     % 变量组合可视化图
-    create_variable_group_plot(results, methods, var_names, figure_dir);
-    log_message('info', '变量组合可视化图已保存');
+    figure_path = fullfile(figure_dir, 'top_combinations_comparison.svg');
+    if ~exist(figure_path, 'file')
+        try
+            create_variable_group_plot(results, methods, var_names, figure_dir);
+            log_message('info', '变量组合可视化图已保存');
+        catch ME
+            log_message('error', sprintf('创建变量组合可视化图时出错: %s', ME.message));
+        end
+    end
     
-    % K折交叉验证性能图（新增）
-    create_cv_performance_plot(cv_results, figure_dir);
-    log_message('info', 'K折交叉验证性能图已保存');
+    % K折交叉验证性能图
+    figure_path = fullfile(figure_dir, 'cv_performance.svg');
+    if ~exist(figure_path, 'file')
+        try
+            create_cv_performance_plot(cv_results, figure_dir);
+            log_message('info', 'K折交叉验证性能图已保存');
+        catch ME
+            log_message('error', sprintf('创建K折交叉验证性能图时出错: %s', ME.message));
+        end
+    end
     
-    % 系数稳定性图（新增）
-    create_coefficient_stability_plot(coef_stability, methods, figure_dir);
-    log_message('info', '系数稳定性图已保存');
+    % 系数稳定性图
+    figure_path = fullfile(figure_dir, 'coefficient_stability_comparison.svg');
+    if ~exist(figure_path, 'file')
+        try
+            create_coefficient_stability_plot(coef_stability, methods, figure_dir);
+            log_message('info', '系数稳定性图已保存');
+        catch ME
+            log_message('error', sprintf('创建系数稳定性图时出错: %s', ME.message));
+        end
+    end
     
-    % 变量贡献图（新增）
-    create_variable_contribution_plot(var_contribution, figure_dir);
-    log_message('info', '变量贡献图已保存');
-catch ME
-    log_message('error', sprintf('创建可视化图表时出错: %s', ME.message));
-end
-
-% 创建综合比较报告
-try
-    create_enhanced_summary_report(results, methods, var_names, cv_results, ...
-        coef_stability, param_stats, var_contribution, report_dir);
-    log_message('info', '增强综合比较报告已保存');
-catch ME
-    log_message('error', sprintf('创建增强综合比较报告时出错: %s', ME.message));
-end
-
+    % 变量贡献图
+    figure_path = fullfile(figure_dir, 'overall_variable_importance.svg');
+    if ~exist(figure_path, 'file')
+        try
+            create_variable_contribution_plot(var_contribution, figure_dir);
+            log_message('info', '变量贡献图已保存');
+        catch ME
+            log_message('error', sprintf('创建变量贡献图时出错: %s', ME.message));
+        end
+    end
+    
+    % 创建箱线图可视化
+    metrics = {'accuracy', 'sensitivity', 'specificity', 'precision', 'f1_score', 'auc'};
+    boxplot_created = false;
+    for i = 1:length(metrics)
+        metric = metrics{i};
+        figure_path = fullfile(figure_dir, sprintf('boxplot_%s.svg', metric));
+        if ~exist(figure_path, 'file') && ~boxplot_created
+            try
+                create_boxplot_visualization(results, methods, figure_dir);
+                boxplot_created = true; % 函数会创建所有箱线图，所以只需调用一次
+                log_message('info', '箱线图可视化已保存');
+            catch ME
+                log_message('error', sprintf('创建箱线图可视化时出错: %s', ME.message));
+                boxplot_created = true; % 即使出错也不再尝试
+            end
+        end
+    end
+    
+    % 创建PR曲线
+    figure_path = fullfile(figure_dir, 'precision_recall_curves.svg');
+    if ~exist(figure_path, 'file')
+        try
+            create_pr_curves(results, methods, figure_dir);
+            log_message('info', 'PR曲线图已保存');
+        catch ME
+            log_message('error', sprintf('创建PR曲线图时出错: %s', ME.message));
+        end
+    end
+    
+    % 创建校准曲线
+    figure_path = fullfile(figure_dir, 'calibration_curves.svg');
+    if ~exist(figure_path, 'file')
+        try
+            create_calibration_curves(results, methods, figure_dir);
+            log_message('info', '校准曲线图已保存');
+        catch ME
+            log_message('error', sprintf('创建校准曲线图时出错: %s', ME.message));
+        end
+    end
+    
+    % 创建混淆矩阵
+    figure_path = fullfile(figure_dir, 'confusion_matrix_comparison.svg');
+    if ~exist(figure_path, 'file')
+        try
+            create_confusion_matrices(results, methods, figure_dir);
+            log_message('info', '混淆矩阵图已保存');
+        catch ME
+            log_message('error', sprintf('创建混淆矩阵图时出错: %s', ME.message));
+        end
+    end
+    
+    %% 3. 创建综合比较报告
+    report_path = fullfile(report_dir, 'enhanced_summary_report.txt');
+    if ~exist(report_path, 'file')
+        try
+            create_enhanced_summary_report(results, methods, var_names, cv_results, ...
+                coef_stability, param_stats, var_contribution, report_dir);
+            log_message('info', '增强综合比较报告已保存');
+        catch ME
+            log_message('error', sprintf('创建增强综合比较报告时出错: %s', ME.message));
+        end
+    end
 end
 
 % 辅助函数：创建AIC和BIC比较表

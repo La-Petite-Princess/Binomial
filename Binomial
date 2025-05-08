@@ -1,4 +1,4 @@
-function Binomial_39(filename)
+function Binomial(filename)
 % 二元逻辑回归模型的完整实现 - 为MacBook Pro 2019 i9-9980HK优化
 % 增强版：增加k折交叉验证、多指标监控、系数稳定性评估、参数置信区间和变量贡献分析
 % 增强版2.0：增加BCa置信区间、箱线图、PR曲线、校准曲线、混淆矩阵、AIC/BIC评价、残差分析、累计方差
@@ -6,7 +6,7 @@ function Binomial_39(filename)
 % 输入:
 %   filename - 包含数据的.mat文件路径
 % 示例:
-%   Binomial_39('mydata.mat');
+%   Binomial('mydata.mat');
 
 % 开始计时
 tic;
@@ -792,7 +792,7 @@ if length(var_names) > 3
         title('变量对前5个主成分的贡献(绝对值)');
         
         % 保存PCA图
-        save_vector_graphic(fig2, 'results', 'pca_analysis');
+        save_figure(fig2, 'results', 'pca_analysis', 'Formats', {'png', 'svg'});
         close(fig2);
         
         % 创建主成分累计方差表
@@ -841,7 +841,7 @@ if length(var_names) > 3
         ylim([0, 100]);
         
         % 保存图形
-        save_vector_graphic(fig3, 'results', 'cumulative_variance');
+        save_figure(fig3, 'results', 'cumulative_variance', 'Formats', {'png', 'svg'});
         close(fig3);
         
         % 创建主成分载荷可视化
@@ -860,7 +860,7 @@ if length(var_names) > 3
         end
         
         % 保存图形
-        save_vector_graphic(fig4, 'results', 'principal_component_loadings');
+        save_figure(fig4, 'results', 'principal_component_loadings', 'Formats', {'png', 'svg'});
         close(fig4);
     catch ME
         log_message('warning', sprintf('PCA可视化失败: %s', ME.message));
@@ -1916,7 +1916,7 @@ try
         plot(xlim, [0 0], 'k--');
         
         % 保存图形
-        save_vector_graphic(fig1, figure_dir, 'pearson_residuals_comparison');
+        save_figure(fig1, figure_dir, 'pearson_residuals_comparison', 'Formats', {'png', 'svg'});
         close(fig1);
         
         % 创建残差比较图 - Deviance残差 (新增)
@@ -1936,7 +1936,7 @@ try
         plot(xlim, [0 0], 'k--');
         
         % 保存图形
-        save_vector_graphic(fig2, figure_dir, 'deviance_residuals_comparison');
+        save_figure(fig2, figure_dir, 'deviance_residuals_comparison', 'Formats', {'png', 'svg'});
         close(fig2);
     end
 catch ME
@@ -4457,7 +4457,7 @@ function create_confusion_matrices(results, methods, figure_dir)
             'FontSize', 14, 'FontWeight', 'bold');
         
         % 保存图形
-        save_vector_graphic(fig, figure_dir, sprintf('%s_confusion_matrix', method));
+        save_figure(fig, figure_dir, '%s_confusion_matrix', 'MethodName', method, 'Formats', {'png', 'svg'});
         close(fig);
     end
 

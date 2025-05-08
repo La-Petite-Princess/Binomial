@@ -440,6 +440,7 @@ classdef ResultSaver < handle
                                 fprintf(fid, '  ');
                                 fprintf(fid, '%g ', value(row, :));
                                 fprintf(fid, ']\n\n');
+                            end
                         elseif ischar(value)
                             fprintf(fid, '%s\n\n', value);
                         elseif iscell(value) && ~isempty(value) && ischar(value{1})

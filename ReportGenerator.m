@@ -1,4 +1,455 @@
-fprintf(fid, '### 异常值检测\n\n');
+classdef ReportGenerator < handle
+    % ReportGenerator - 分析报告生成模块
+    %
+    % 该类负责根据模型分析结果生成详细的分析报告，
+    % 支持HTML、PDF等多种格式，包含文本说明、表格和图形。
+    %
+    % 属性:
+    %   logger - 日志记录器对象
+    %   resultData - 分析结果数据
+    %   reportTitle - 报告标题
+    %   reportSubtitle - 报告副标题
+    %   author - 报告作者
+    %   datestamp - 报告日期
+    %   reportDirectory - 报告保存目录
+    %   templateDirectory - 模板目录
+    %   figures - 报告中包含的图形
+    %   htmlReport - HTML 报告内容
+    %   reportFiles - 已生成的报告文件信息
+    
+    properties
+        logger               % 日志记录器
+        resultData           % 分析结果数据
+        reportTitle          % 报告标题
+        reportSubtitle       % 报告副标题
+        author               % 报告作者
+        datestamp            % 报告日期
+        reportDirectory      % 报告保存目录
+        templateDirectory    % 模板目录
+        figures              % 报告图形
+        htmlReport           % HTML报告内容
+        reportFiles          % 已生成报告文件信息
+    end
+    
+    methods
+        function obj = ReportGenerator(logger)
+            % 构造函数
+            %
+            % 参数:
+            %   logger - BinomialLogger实例
+            
+            if nargin < 1 || isempty(logger)
+                obj.logger = BinomialLogger.getLogger('ReportGenerator');
+            else
+                obj.logger = logger;
+            end
+            
+            % 初始化属性
+            obj.reportTitle = 'Binomial 分析报告';
+            obj.reportSubtitle = '详细结果与解释';
+            obj.author = 'Binomial 分析系统';
+            obj.datestamp = datestr(now, 'yyyy-mm-dd HH:MM:SS');
+            obj.reportDirectory = pwd;
+            obj.templateDirectory = fullfile(fileparts(which('ReportGenerator')), 'templates');
+            obj.figures = {};
+            obj.htmlReport = '';
+            obj.reportFiles = struct('type', {}, 'path', {}, 'size', {}, 'timestamp', {});
+            
+            obj.logger.info('报告生成模块已初始化');
+        end
+        
+        function setResultData(obj, resultData)
+            % 设置分析结果数据
+            %
+            % 参数:
+            %   resultData - 包含分析结果的结构体
+            
+            obj.resultData = resultData;
+            obj.logger.debug('已设置分析结果数据');
+        end
+        
+        function setReportDetails(obj, title, subtitle, author)
+            % 设置报告详细信息
+            %
+            % 参数:
+            %   title - 报告标题
+            %   subtitle - 报告副标题（可选）
+            %   author - 报告作者（可选）
+            
+            if nargin >= 2 && ~isempty(title)
+                obj.reportTitle = title;
+            end
+            
+            if nargin >= 3 && ~isempty(subtitle)
+                obj.reportSubtitle = subtitle;
+            end
+            
+            if nargin >= 4 && ~isempty(author)
+                obj.author = author;
+            end
+            
+            obj.logger.debug('已设置报告详细信息');
+        end
+        
+        function setReportDirectory(obj, directory)
+            % 设置报告保存目录
+            %
+            % 参数:
+            %   directory - 保存目录路径
+            
+            % 检查目录是否存在，不存在则创建
+            if ~exist(directory, 'dir')
+                [success, msg] = mkdir(directory);
+                if ~success
+                    obj.logger.error('创建目录失败: %s，错误: %s', directory, msg);
+                    return;
+                end
+            end
+            
+            obj.reportDirectory = directory;
+            obj.logger.info('报告保存目录已设置为: %s', directory);
+        end
+        
+        function addFigure(obj, fig, title, description)
+            % 添加图形到报告
+            %
+            % 参数:
+            %   fig - 图形句柄
+            %   title - 图形标题
+            %   description - 图形描述（可选）
+            
+            if nargin < 4
+                description = '';
+            end
+            
+            newFig = struct();
+            newFig.handle = fig;
+            newFig.title = title;
+            newFig.description = description;
+            
+            % 添加图形
+            figIndex = length(obj.figures) + 1;
+            obj.figures{figIndex} = newFig;
+            
+            obj.logger.debug('已添加图形到报告: %s', title);
+        end
+        
+        function generateHTMLReport(obj)
+            % 生成HTML格式的分析报告
+            
+            if isempty(obj.resultData)
+                obj.logger.error('没有分析结果数据，无法生成报告');
+                return;
+            end
+            
+            % 初始化HTML内容
+            html = obj.getHTMLHeader();
+            
+            % 添加报告标题和元信息
+            html = [html, obj.getHTMLTitleSection()];
+            
+            % 添加摘要部分
+            html = [html, obj.getHTMLSummarySection()];
+            
+            % 添加模型信息部分
+            html = [html, obj.getHTMLModelSection()];
+            
+            % 添加变量重要性部分
+            html = [html, obj.getHTMLVariableImportanceSection()];
+            
+            % 添加诊断部分
+            html = [html, obj.getHTMLDiagnosticsSection()];
+            
+            % 添加结论和建议部分
+            html = [html, obj.getHTMLConclusionSection()];
+            
+            % 添加附录（如果有）
+            html = [html, obj.getHTMLAppendixSection()];
+            
+            % 添加页脚
+            html = [html, obj.getHTMLFooter()];
+            
+            % 保存HTML内容
+            obj.htmlReport = html;
+            
+            obj.logger.info('HTML报告内容已生成');
+        end
+        
+        function [reportPath, fileInfo] = saveHTMLReport(obj, filename)
+            % 保存HTML报告到文件
+            %
+            % 参数:
+            %   filename - 文件名（可选，默认为 'binomial_report.html'）
+            %
+            % 返回值:
+            %   reportPath - 保存的文件路径
+            %   fileInfo - 文件信息结构体
+            
+            if nargin < 2 || isempty(filename)
+                filename = 'binomial_report.html';
+            end
+            
+            % 确保文件名有.html扩展名
+            if ~endsWith(filename, '.html')
+                filename = [filename, '.html'];
+            end
+            
+            % 如果HTML内容为空，先生成
+            if isempty(obj.htmlReport)
+                obj.generateHTMLReport();
+            end
+            
+            % 构建完整文件路径
+            reportPath = fullfile(obj.reportDirectory, filename);
+            
+            try
+                % 写入文件
+                fid = fopen(reportPath, 'w');
+                fprintf(fid, '%s', obj.htmlReport);
+                fclose(fid);
+                
+                % 获取文件信息
+                fileInfo = dir(reportPath);
+                
+                % 记录已生成文件的信息
+                index = length(obj.reportFiles) + 1;
+                obj.reportFiles(index).type = 'HTML';
+                obj.reportFiles(index).path = reportPath;
+                obj.reportFiles(index).size = fileInfo.bytes;
+                obj.reportFiles(index).timestamp = datestr(now);
+                
+                obj.logger.info('已保存HTML报告: %s (%.2f KB)', reportPath, fileInfo.bytes/1024);
+            catch ME
+                obj.logger.error('保存HTML报告失败: %s', ME.message);
+                reportPath = '';
+                fileInfo = [];
+            end
+        end
+        
+        function [reportPath, fileInfo] = generateMarkdownReport(obj, filename)
+            % 生成Markdown格式的分析报告并保存
+            %
+            % 参数:
+            %   filename - 文件名（可选，默认为 'binomial_report.md'）
+            %
+            % 返回值:
+            %   reportPath - 保存的文件路径
+            %   fileInfo - 文件信息结构体
+            
+            if isempty(obj.resultData)
+                obj.logger.error('没有分析结果数据，无法生成报告');
+                reportPath = '';
+                fileInfo = [];
+                return;
+            end
+            
+            if nargin < 2 || isempty(filename)
+                filename = 'binomial_report.md';
+            end
+            
+            % 确保文件名有.md扩展名
+            if ~endsWith(filename, '.md')
+                filename = [filename, '.md'];
+            end
+            
+            % 构建完整文件路径
+            reportPath = fullfile(obj.reportDirectory, filename);
+            
+            try
+                % 打开文件
+                fid = fopen(reportPath, 'w');
+                
+                % 写入标题和元信息
+                fprintf(fid, '# %s\n\n', obj.reportTitle);
+                fprintf(fid, '## %s\n\n', obj.reportSubtitle);
+                fprintf(fid, '**作者:** %s  \n', obj.author);
+                fprintf(fid, '**日期:** %s  \n\n', obj.datestamp);
+                fprintf(fid, '---\n\n');
+                
+                % 写入摘要部分
+                fprintf(fid, '## 摘要\n\n');
+                
+                if isfield(obj.resultData, 'summary')
+                    fprintf(fid, '%s\n\n', obj.resultData.summary);
+                else
+                    fprintf(fid, '本报告包含了使用Binomial分析工具进行的统计分析结果。\n\n');
+                end
+                
+                % 写入模型信息部分
+                fprintf(fid, '## 模型信息\n\n');
+                
+                if isfield(obj.resultData, 'modelInfo')
+                    modelInfo = obj.resultData.modelInfo;
+                    
+                    fprintf(fid, '### 模型概述\n\n');
+                    
+                    if isfield(modelInfo, 'modelType')
+                        fprintf(fid, '- **模型类型:** %s\n', modelInfo.modelType);
+                    end
+                    
+                    if isfield(modelInfo, 'observations')
+                        fprintf(fid, '- **观测数量:** %d\n', modelInfo.observations);
+                    end
+                    
+                    if isfield(modelInfo, 'variables')
+                        fprintf(fid, '- **变量数量:** %d\n', modelInfo.variables);
+                    end
+                    
+                    fprintf(fid, '\n');
+                    
+                    % 写入模型质量指标
+                    if isfield(modelInfo, 'quality')
+                        quality = modelInfo.quality;
+                        
+                        fprintf(fid, '### 模型质量指标\n\n');
+                        fprintf(fid, '| 指标 | 值 |\n');
+                        fprintf(fid, '|-----|-----|\n');
+                        
+                        if isfield(quality, 'R2')
+                            fprintf(fid, '| R² | %.4f |\n', quality.R2);
+                        end
+                        
+                        if isfield(quality, 'AdjustedR2')
+                            fprintf(fid, '| 调整R² | %.4f |\n', quality.AdjustedR2);
+                        end
+                        
+                        if isfield(quality, 'RMSE')
+                            fprintf(fid, '| RMSE | %.4f |\n', quality.RMSE);
+                        end
+                        
+                        if isfield(quality, 'AIC')
+                            fprintf(fid, '| AIC | %.2f |\n', quality.AIC);
+                        end
+                        
+                        if isfield(quality, 'BIC')
+                            fprintf(fid, '| BIC | %.2f |\n', quality.BIC);
+                        end
+                        
+                        fprintf(fid, '\n');
+                    end
+                else
+                    fprintf(fid, '未提供模型信息。\n\n');
+                end
+                
+                % 写入系数部分
+                fprintf(fid, '## 系数估计\n\n');
+                
+                if isfield(obj.resultData, 'coefficients') && isfield(obj.resultData, 'standardErrors')
+                    coefficients = obj.resultData.coefficients;
+                    standardErrors = obj.resultData.standardErrors;
+                    
+                    fprintf(fid, '| 变量 | 系数 | 标准误 | t值 | p值 |\n');
+                    fprintf(fid, '|------|------|--------|-----|------|\n');
+                    
+                    for i = 1:length(coefficients)
+                        varName = '';
+                        if isfield(obj.resultData, 'variableNames') && length(obj.resultData.variableNames) >= i
+                            varName = obj.resultData.variableNames{i};
+                        else
+                            varName = sprintf('变量%d', i);
+                        end
+                        
+                        tStat = coefficients(i) / standardErrors(i);
+                        pValue = 2 * (1 - tcdf(abs(tStat), obj.resultData.observations - length(coefficients)));
+                        
+                        fprintf(fid, '| %s | %.4f | %.4f | %.4f | %.4f |\n', ...
+                            varName, coefficients(i), standardErrors(i), tStat, pValue);
+                    end
+                    
+                    fprintf(fid, '\n');
+                else
+                    fprintf(fid, '未提供系数信息。\n\n');
+                end
+                
+                % 写入变量重要性部分
+                fprintf(fid, '## 变量重要性\n\n');
+                
+                if isfield(obj.resultData, 'importance')
+                    importance = obj.resultData.importance;
+                    
+                    % 按重要性排序
+                    [sortedImp, idx] = sort(importance, 'descend');
+                    
+                    fprintf(fid, '| 变量 | 重要性 |\n');
+                    fprintf(fid, '|------|--------|\n');
+                    
+                    for i = 1:length(sortedImp)
+                        varIdx = idx(i);
+                        varName = '';
+                        if isfield(obj.resultData, 'variableNames') && length(obj.resultData.variableNames) >= varIdx
+                            varName = obj.resultData.variableNames{varIdx};
+                        else
+                            varName = sprintf('变量%d', varIdx);
+                        end
+                        
+                        fprintf(fid, '| %s | %.4f |\n', varName, sortedImp(i));
+                    end
+                    
+                    fprintf(fid, '\n');
+                elseif isfield(obj.resultData, 'standardizedCoefficients')
+                    stdCoefs = abs(obj.resultData.standardizedCoefficients);
+                    
+                    % 按绝对值排序
+                    [sortedCoefs, idx] = sort(stdCoefs, 'descend');
+                    
+                    fprintf(fid, '| 变量 | 标准化系数 |\n');
+                    fprintf(fid, '|------|------------|\n');
+                    
+                    for i = 1:length(sortedCoefs)
+                        varIdx = idx(i);
+                        varName = '';
+                        if isfield(obj.resultData, 'variableNames') && length(obj.resultData.variableNames) >= varIdx
+                            varName = obj.resultData.variableNames{varIdx};
+                        else
+                            varName = sprintf('变量%d', varIdx);
+                        end
+                        
+                        fprintf(fid, '| %s | %.4f |\n', varName, sortedCoefs(i));
+                    end
+                    
+                    fprintf(fid, '\n');
+                else
+                    fprintf(fid, '未提供变量重要性信息。\n\n');
+                end
+                
+                % 写入诊断部分
+                fprintf(fid, '## 模型诊断\n\n');
+                
+                if isfield(obj.resultData, 'diagnostics')
+                    diagnostics = obj.resultData.diagnostics;
+                    
+                    if isfield(diagnostics, 'normalityTest')
+                        fprintf(fid, '### 残差正态性检验\n\n');
+                        
+                        test = diagnostics.normalityTest;
+                        fprintf(fid, '- **检验方法:** %s\n', test.method);
+                        fprintf(fid, '- **统计量:** %.4f\n', test.statistic);
+                        fprintf(fid, '- **p值:** %.4f\n', test.pValue);
+                        fprintf(fid, '- **结论:** %s\n\n', test.conclusion);
+                    end
+                    
+                    if isfield(diagnostics, 'autocorrelationTest')
+                        fprintf(fid, '### 残差自相关检验\n\n');
+                        
+                        test = diagnostics.autocorrelationTest;
+                        fprintf(fid, '- **检验方法:** %s\n', test.method);
+                        fprintf(fid, '- **统计量:** %.4f\n', test.statistic);
+                        fprintf(fid, '- **p值:** %.4f\n', test.pValue);
+                        fprintf(fid, '- **结论:** %s\n\n', test.conclusion);
+                    end
+                    
+                    if isfield(diagnostics, 'heteroskedasticityTest')
+                        fprintf(fid, '### 残差异方差检验\n\n');
+                        
+                        test = diagnostics.heteroskedasticityTest;
+                        fprintf(fid, '- **检验方法:** %s\n', test.method);
+                        fprintf(fid, '- **统计量:** %.4f\n', test.statistic);
+                        fprintf(fid, '- **p值:** %.4f\n', test.pValue);
+                        fprintf(fid, '- **结论:** %s\n\n', test.conclusion);
+                    end
+                    
+                    if isfield(diagnostics, 'outliers') && ~isempty(diagnostics.outliers)
+                        fprintf(fid, '### 异常值检测\n\n');
                         
                         outliers = diagnostics.outliers;
                         fprintf(fid, '- **检测到的异常值数量:** %d\n', length(outliers));
@@ -704,455 +1155,4 @@ fprintf(fid, '### 异常值检测\n\n');
                 '</html>\n'];
         end
     end
-endclassdef ReportGenerator < handle
-    % ReportGenerator - 分析报告生成模块
-    %
-    % 该类负责根据模型分析结果生成详细的分析报告，
-    % 支持HTML、PDF等多种格式，包含文本说明、表格和图形。
-    %
-    % 属性:
-    %   logger - 日志记录器对象
-    %   resultData - 分析结果数据
-    %   reportTitle - 报告标题
-    %   reportSubtitle - 报告副标题
-    %   author - 报告作者
-    %   datestamp - 报告日期
-    %   reportDirectory - 报告保存目录
-    %   templateDirectory - 模板目录
-    %   figures - 报告中包含的图形
-    %   htmlReport - HTML 报告内容
-    %   reportFiles - 已生成的报告文件信息
-    
-    properties
-        logger               % 日志记录器
-        resultData           % 分析结果数据
-        reportTitle          % 报告标题
-        reportSubtitle       % 报告副标题
-        author               % 报告作者
-        datestamp            % 报告日期
-        reportDirectory      % 报告保存目录
-        templateDirectory    % 模板目录
-        figures              % 报告图形
-        htmlReport           % HTML报告内容
-        reportFiles          % 已生成报告文件信息
     end
-    
-    methods
-        function obj = ReportGenerator(logger)
-            % 构造函数
-            %
-            % 参数:
-            %   logger - BinomialLogger实例
-            
-            if nargin < 1 || isempty(logger)
-                obj.logger = BinomialLogger.getLogger('ReportGenerator');
-            else
-                obj.logger = logger;
-            end
-            
-            % 初始化属性
-            obj.reportTitle = 'Binomial 分析报告';
-            obj.reportSubtitle = '详细结果与解释';
-            obj.author = 'Binomial 分析系统';
-            obj.datestamp = datestr(now, 'yyyy-mm-dd HH:MM:SS');
-            obj.reportDirectory = pwd;
-            obj.templateDirectory = fullfile(fileparts(which('ReportGenerator')), 'templates');
-            obj.figures = {};
-            obj.htmlReport = '';
-            obj.reportFiles = struct('type', {}, 'path', {}, 'size', {}, 'timestamp', {});
-            
-            obj.logger.info('报告生成模块已初始化');
-        end
-        
-        function setResultData(obj, resultData)
-            % 设置分析结果数据
-            %
-            % 参数:
-            %   resultData - 包含分析结果的结构体
-            
-            obj.resultData = resultData;
-            obj.logger.debug('已设置分析结果数据');
-        end
-        
-        function setReportDetails(obj, title, subtitle, author)
-            % 设置报告详细信息
-            %
-            % 参数:
-            %   title - 报告标题
-            %   subtitle - 报告副标题（可选）
-            %   author - 报告作者（可选）
-            
-            if nargin >= 2 && ~isempty(title)
-                obj.reportTitle = title;
-            end
-            
-            if nargin >= 3 && ~isempty(subtitle)
-                obj.reportSubtitle = subtitle;
-            end
-            
-            if nargin >= 4 && ~isempty(author)
-                obj.author = author;
-            end
-            
-            obj.logger.debug('已设置报告详细信息');
-        end
-        
-        function setReportDirectory(obj, directory)
-            % 设置报告保存目录
-            %
-            % 参数:
-            %   directory - 保存目录路径
-            
-            % 检查目录是否存在，不存在则创建
-            if ~exist(directory, 'dir')
-                [success, msg] = mkdir(directory);
-                if ~success
-                    obj.logger.error('创建目录失败: %s，错误: %s', directory, msg);
-                    return;
-                end
-            end
-            
-            obj.reportDirectory = directory;
-            obj.logger.info('报告保存目录已设置为: %s', directory);
-        end
-        
-        function addFigure(obj, fig, title, description)
-            % 添加图形到报告
-            %
-            % 参数:
-            %   fig - 图形句柄
-            %   title - 图形标题
-            %   description - 图形描述（可选）
-            
-            if nargin < 4
-                description = '';
-            end
-            
-            newFig = struct();
-            newFig.handle = fig;
-            newFig.title = title;
-            newFig.description = description;
-            
-            % 添加图形
-            figIndex = length(obj.figures) + 1;
-            obj.figures{figIndex} = newFig;
-            
-            obj.logger.debug('已添加图形到报告: %s', title);
-        end
-        
-        function generateHTMLReport(obj)
-            % 生成HTML格式的分析报告
-            
-            if isempty(obj.resultData)
-                obj.logger.error('没有分析结果数据，无法生成报告');
-                return;
-            end
-            
-            % 初始化HTML内容
-            html = obj.getHTMLHeader();
-            
-            % 添加报告标题和元信息
-            html = [html, obj.getHTMLTitleSection()];
-            
-            % 添加摘要部分
-            html = [html, obj.getHTMLSummarySection()];
-            
-            % 添加模型信息部分
-            html = [html, obj.getHTMLModelSection()];
-            
-            % 添加变量重要性部分
-            html = [html, obj.getHTMLVariableImportanceSection()];
-            
-            % 添加诊断部分
-            html = [html, obj.getHTMLDiagnosticsSection()];
-            
-            % 添加结论和建议部分
-            html = [html, obj.getHTMLConclusionSection()];
-            
-            % 添加附录（如果有）
-            html = [html, obj.getHTMLAppendixSection()];
-            
-            % 添加页脚
-            html = [html, obj.getHTMLFooter()];
-            
-            % 保存HTML内容
-            obj.htmlReport = html;
-            
-            obj.logger.info('HTML报告内容已生成');
-        end
-        
-        function [reportPath, fileInfo] = saveHTMLReport(obj, filename)
-            % 保存HTML报告到文件
-            %
-            % 参数:
-            %   filename - 文件名（可选，默认为 'binomial_report.html'）
-            %
-            % 返回值:
-            %   reportPath - 保存的文件路径
-            %   fileInfo - 文件信息结构体
-            
-            if nargin < 2 || isempty(filename)
-                filename = 'binomial_report.html';
-            end
-            
-            % 确保文件名有.html扩展名
-            if ~endsWith(filename, '.html')
-                filename = [filename, '.html'];
-            end
-            
-            % 如果HTML内容为空，先生成
-            if isempty(obj.htmlReport)
-                obj.generateHTMLReport();
-            end
-            
-            % 构建完整文件路径
-            reportPath = fullfile(obj.reportDirectory, filename);
-            
-            try
-                % 写入文件
-                fid = fopen(reportPath, 'w');
-                fprintf(fid, '%s', obj.htmlReport);
-                fclose(fid);
-                
-                % 获取文件信息
-                fileInfo = dir(reportPath);
-                
-                % 记录已生成文件的信息
-                index = length(obj.reportFiles) + 1;
-                obj.reportFiles(index).type = 'HTML';
-                obj.reportFiles(index).path = reportPath;
-                obj.reportFiles(index).size = fileInfo.bytes;
-                obj.reportFiles(index).timestamp = datestr(now);
-                
-                obj.logger.info('已保存HTML报告: %s (%.2f KB)', reportPath, fileInfo.bytes/1024);
-            catch ME
-                obj.logger.error('保存HTML报告失败: %s', ME.message);
-                reportPath = '';
-                fileInfo = [];
-            end
-        end
-        
-        function [reportPath, fileInfo] = generateMarkdownReport(obj, filename)
-            % 生成Markdown格式的分析报告并保存
-            %
-            % 参数:
-            %   filename - 文件名（可选，默认为 'binomial_report.md'）
-            %
-            % 返回值:
-            %   reportPath - 保存的文件路径
-            %   fileInfo - 文件信息结构体
-            
-            if isempty(obj.resultData)
-                obj.logger.error('没有分析结果数据，无法生成报告');
-                reportPath = '';
-                fileInfo = [];
-                return;
-            end
-            
-            if nargin < 2 || isempty(filename)
-                filename = 'binomial_report.md';
-            end
-            
-            % 确保文件名有.md扩展名
-            if ~endsWith(filename, '.md')
-                filename = [filename, '.md'];
-            end
-            
-            % 构建完整文件路径
-            reportPath = fullfile(obj.reportDirectory, filename);
-            
-            try
-                % 打开文件
-                fid = fopen(reportPath, 'w');
-                
-                % 写入标题和元信息
-                fprintf(fid, '# %s\n\n', obj.reportTitle);
-                fprintf(fid, '## %s\n\n', obj.reportSubtitle);
-                fprintf(fid, '**作者:** %s  \n', obj.author);
-                fprintf(fid, '**日期:** %s  \n\n', obj.datestamp);
-                fprintf(fid, '---\n\n');
-                
-                % 写入摘要部分
-                fprintf(fid, '## 摘要\n\n');
-                
-                if isfield(obj.resultData, 'summary')
-                    fprintf(fid, '%s\n\n', obj.resultData.summary);
-                else
-                    fprintf(fid, '本报告包含了使用Binomial分析工具进行的统计分析结果。\n\n');
-                end
-                
-                % 写入模型信息部分
-                fprintf(fid, '## 模型信息\n\n');
-                
-                if isfield(obj.resultData, 'modelInfo')
-                    modelInfo = obj.resultData.modelInfo;
-                    
-                    fprintf(fid, '### 模型概述\n\n');
-                    
-                    if isfield(modelInfo, 'modelType')
-                        fprintf(fid, '- **模型类型:** %s\n', modelInfo.modelType);
-                    end
-                    
-                    if isfield(modelInfo, 'observations')
-                        fprintf(fid, '- **观测数量:** %d\n', modelInfo.observations);
-                    end
-                    
-                    if isfield(modelInfo, 'variables')
-                        fprintf(fid, '- **变量数量:** %d\n', modelInfo.variables);
-                    end
-                    
-                    fprintf(fid, '\n');
-                    
-                    % 写入模型质量指标
-                    if isfield(modelInfo, 'quality')
-                        quality = modelInfo.quality;
-                        
-                        fprintf(fid, '### 模型质量指标\n\n');
-                        fprintf(fid, '| 指标 | 值 |\n');
-                        fprintf(fid, '|-----|-----|\n');
-                        
-                        if isfield(quality, 'R2')
-                            fprintf(fid, '| R² | %.4f |\n', quality.R2);
-                        end
-                        
-                        if isfield(quality, 'AdjustedR2')
-                            fprintf(fid, '| 调整R² | %.4f |\n', quality.AdjustedR2);
-                        end
-                        
-                        if isfield(quality, 'RMSE')
-                            fprintf(fid, '| RMSE | %.4f |\n', quality.RMSE);
-                        end
-                        
-                        if isfield(quality, 'AIC')
-                            fprintf(fid, '| AIC | %.2f |\n', quality.AIC);
-                        end
-                        
-                        if isfield(quality, 'BIC')
-                            fprintf(fid, '| BIC | %.2f |\n', quality.BIC);
-                        end
-                        
-                        fprintf(fid, '\n');
-                    end
-                else
-                    fprintf(fid, '未提供模型信息。\n\n');
-                end
-                
-                % 写入系数部分
-                fprintf(fid, '## 系数估计\n\n');
-                
-                if isfield(obj.resultData, 'coefficients') && isfield(obj.resultData, 'standardErrors')
-                    coefficients = obj.resultData.coefficients;
-                    standardErrors = obj.resultData.standardErrors;
-                    
-                    fprintf(fid, '| 变量 | 系数 | 标准误 | t值 | p值 |\n');
-                    fprintf(fid, '|------|------|--------|-----|------|\n');
-                    
-                    for i = 1:length(coefficients)
-                        varName = '';
-                        if isfield(obj.resultData, 'variableNames') && length(obj.resultData.variableNames) >= i
-                            varName = obj.resultData.variableNames{i};
-                        else
-                            varName = sprintf('变量%d', i);
-                        end
-                        
-                        tStat = coefficients(i) / standardErrors(i);
-                        pValue = 2 * (1 - tcdf(abs(tStat), obj.resultData.observations - length(coefficients)));
-                        
-                        fprintf(fid, '| %s | %.4f | %.4f | %.4f | %.4f |\n', ...
-                            varName, coefficients(i), standardErrors(i), tStat, pValue);
-                    end
-                    
-                    fprintf(fid, '\n');
-                else
-                    fprintf(fid, '未提供系数信息。\n\n');
-                end
-                
-                % 写入变量重要性部分
-                fprintf(fid, '## 变量重要性\n\n');
-                
-                if isfield(obj.resultData, 'importance')
-                    importance = obj.resultData.importance;
-                    
-                    % 按重要性排序
-                    [sortedImp, idx] = sort(importance, 'descend');
-                    
-                    fprintf(fid, '| 变量 | 重要性 |\n');
-                    fprintf(fid, '|------|--------|\n');
-                    
-                    for i = 1:length(sortedImp)
-                        varIdx = idx(i);
-                        varName = '';
-                        if isfield(obj.resultData, 'variableNames') && length(obj.resultData.variableNames) >= varIdx
-                            varName = obj.resultData.variableNames{varIdx};
-                        else
-                            varName = sprintf('变量%d', varIdx);
-                        end
-                        
-                        fprintf(fid, '| %s | %.4f |\n', varName, sortedImp(i));
-                    end
-                    
-                    fprintf(fid, '\n');
-                elseif isfield(obj.resultData, 'standardizedCoefficients')
-                    stdCoefs = abs(obj.resultData.standardizedCoefficients);
-                    
-                    % 按绝对值排序
-                    [sortedCoefs, idx] = sort(stdCoefs, 'descend');
-                    
-                    fprintf(fid, '| 变量 | 标准化系数 |\n');
-                    fprintf(fid, '|------|------------|\n');
-                    
-                    for i = 1:length(sortedCoefs)
-                        varIdx = idx(i);
-                        varName = '';
-                        if isfield(obj.resultData, 'variableNames') && length(obj.resultData.variableNames) >= varIdx
-                            varName = obj.resultData.variableNames{varIdx};
-                        else
-                            varName = sprintf('变量%d', varIdx);
-                        end
-                        
-                        fprintf(fid, '| %s | %.4f |\n', varName, sortedCoefs(i));
-                    end
-                    
-                    fprintf(fid, '\n');
-                else
-                    fprintf(fid, '未提供变量重要性信息。\n\n');
-                end
-                
-                % 写入诊断部分
-                fprintf(fid, '## 模型诊断\n\n');
-                
-                if isfield(obj.resultData, 'diagnostics')
-                    diagnostics = obj.resultData.diagnostics;
-                    
-                    if isfield(diagnostics, 'normalityTest')
-                        fprintf(fid, '### 残差正态性检验\n\n');
-                        
-                        test = diagnostics.normalityTest;
-                        fprintf(fid, '- **检验方法:** %s\n', test.method);
-                        fprintf(fid, '- **统计量:** %.4f\n', test.statistic);
-                        fprintf(fid, '- **p值:** %.4f\n', test.pValue);
-                        fprintf(fid, '- **结论:** %s\n\n', test.conclusion);
-                    end
-                    
-                    if isfield(diagnostics, 'autocorrelationTest')
-                        fprintf(fid, '### 残差自相关检验\n\n');
-                        
-                        test = diagnostics.autocorrelationTest;
-                        fprintf(fid, '- **检验方法:** %s\n', test.method);
-                        fprintf(fid, '- **统计量:** %.4f\n', test.statistic);
-                        fprintf(fid, '- **p值:** %.4f\n', test.pValue);
-                        fprintf(fid, '- **结论:** %s\n\n', test.conclusion);
-                    end
-                    
-                    if isfield(diagnostics, 'heteroskedasticityTest')
-                        fprintf(fid, '### 残差异方差检验\n\n');
-                        
-                        test = diagnostics.heteroskedasticityTest;
-                        fprintf(fid, '- **检验方法:** %s\n', test.method);
-                        fprintf(fid, '- **统计量:** %.4f\n', test.statistic);
-                        fprintf(fid, '- **p值:** %.4f\n', test.pValue);
-                        fprintf(fid, '- **结论:** %s\n\n', test.conclusion);
-                    end
-                    
-                    if isfield(diagnostics, 'outliers') && ~isempty(diagnostics.outliers)
-                        fprintf(fid, '### 异常值检测\n

@@ -1,4 +1,133 @@
-% 添加零线
+classdef ResultVisualizer < handle    
+    % ResultVisualizer - 模型结果可视化
+    %
+    % 该类负责将模型的各种结果以图形化方式展示，包括系数图、
+    % 拟合优度图、残差诊断图、变量重要性图等。
+    %
+    % 属性:
+    %   logger - 日志记录器对象
+    %   modelResults - 模型结果结构体
+    %   figureHandles - 生成的图形句柄
+    %   figureCounter - 图形计数器
+    %   figuresInfo - 图形信息记录
+    %   colorScheme - 颜色方案
+    %   savePath - 图形保存路径
+    %   highDPI - 是否使用高DPI输出
+    
+    properties
+        logger            % 日志记录器
+        modelResults      % 模型结果结构体
+        figureHandles     % 生成的图形句柄
+        figureCounter     % 图形计数器
+        figuresInfo       % 图形信息记录
+        colorScheme       % 颜色方案
+        savePath          % 图形保存路径
+        highDPI           % 是否使用高DPI输出
+    end
+    
+    methods
+        function obj = ResultVisualizer(logger, colorScheme)
+            % 构造函数
+            %
+            % 参数:
+            %   logger - BinomialLogger实例
+            %   colorScheme - 颜色方案（可选）
+            
+            if nargin < 1 || isempty(logger)
+                obj.logger = BinomialLogger.getLogger('ResultVisualizer');
+            else
+                obj.logger = logger;
+            end
+            
+            if nargin < 2 || isempty(colorScheme)
+                % 默认颜色方案
+                obj.colorScheme = struct(...
+                    'primary', [0.2, 0.4, 0.6], ...
+                    'secondary', [0.8, 0.3, 0.3], ...
+                    'tertiary', [0.3, 0.7, 0.4], ...
+                    'light', [0.8, 0.8, 0.8], ...
+                    'dark', [0.2, 0.2, 0.2], ...
+                    'highlight', [1.0, 0.5, 0.0], ...
+                    'gradient', {{'#3288bd', '#99d594', '#e6f598', '#fee08b', '#fc8d59', '#d53e4f'}});
+            else
+                obj.colorScheme = colorScheme;
+            end
+            
+            obj.figureHandles = {};
+            obj.figureCounter = 0;
+            obj.figuresInfo = struct('title', {}, 'description', {}, 'filename', {});
+            obj.savePath = pwd;
+            obj.highDPI = true;
+            
+            obj.logger.info('结果可视化模块已初始化');
+        end
+        
+        function setModelResults(obj, modelResults)
+            % 设置模型结果
+            %
+            % 参数:
+            %   modelResults - 包含模型分析结果的结构体
+            
+            obj.modelResults = modelResults;
+            obj.logger.debug('模型结果已设置');
+        end
+        
+        function setSavePath(obj, path)
+            % 设置图形保存路径
+            %
+            % 参数:
+            %   path - 图形保存路径
+            
+            if exist(path, 'dir') || mkdir(path)
+                obj.savePath = path;
+                obj.logger.info('图形保存路径已设置为: %s', path);
+            else
+                obj.logger.error('无法创建或访问路径: %s', path);
+            end
+        end
+        
+        function plotCoefficientEstimates(obj, coefficients, stdErrors, names, figTitle)
+            % 绘制系数估计及置信区间
+            %
+            % 参数:
+            %   coefficients - 系数向量
+            %   stdErrors - 标准误向量
+            %   names - 变量名称元胞数组（可选）
+            %   figTitle - 图形标题（可选）
+            
+            if nargin < 5 || isempty(figTitle)
+                figTitle = '系数估计与置信区间';
+            end
+            
+            if nargin < 4 || isempty(names)
+                names = arrayfun(@(i) sprintf('Var %d', i), ...
+                    1:length(coefficients), 'UniformOutput', false);
+            end
+            
+            % 创建图形
+            fig = figure('Name', figTitle, 'Position', [100, 100, 800, 600]);
+            obj.figureCounter = obj.figureCounter + 1;
+            obj.figureHandles{obj.figureCounter} = fig;
+            
+            % 计算95%置信区间
+            ci95 = 1.96 * stdErrors;
+            
+            % 按系数绝对值排序
+            [~, idx] = sort(abs(coefficients), 'descend');
+            sortedCoefs = coefficients(idx);
+            sortedErrors = ci95(idx);
+            sortedNames = names(idx);
+            
+            % 创建水平条形图
+            barh(sortedCoefs, 'FaceColor', obj.colorScheme.primary);
+            
+            % 添加误差线
+            hold on;
+            errorbar(sortedCoefs, 1:length(sortedCoefs), sortedErrors, sortedErrors, '.', ...
+                'Color', obj.colorScheme.secondary, 'LineWidth', 1.5, 'CapSize', 10, ...
+                'Marker', 'none', 'LineStyle', 'none');
+            
+            % 添加零线
             plot([0, 0], [0, length(sortedCoefs)+1], '--', 'Color', obj.colorScheme.dark, 'LineWidth', 1);
             hold off;
             
@@ -584,8 +713,8 @@
                 obj.logger.error('未设置模型结果，无法生成图形');
                 return;
             end
-            
-            % 绘制系数估计图
+
+             % 绘制系数估计图
             if isfield(modelResults, 'coefficients') && isfield(modelResults, 'standardErrors')
                 obj.plotCoefficientEstimates(modelResults.coefficients, ...
                     modelResults.standardErrors, modelResults.variableNames, ...
@@ -638,31 +767,30 @@
                 end
             end
             
-            obj.logger.info('已生成所有相关图形，共 %d 个', obj.figureCounter);
+            obj.logger.info('已生成所有图形，共 %d 张', obj.figureCounter);
         end
         
-        function saveAllFigures(obj, format, dpi)
-            % 保存所有生成的图形
+        function saveAllFigures(obj, format, resolution)
+            % 保存所有图形
             %
             % 参数:
-            %   format - 图形保存格式，如'png', 'pdf', 'eps'（可选，默认'png'）
-            %   dpi - 图形分辨率（可选，默认300）
+            %   format - 保存格式，可选 'png', 'pdf', 'fig'等（默认 'png'）
+            %   resolution - 分辨率（默认 300 dpi）
             
             if nargin < 2 || isempty(format)
                 format = 'png';
             end
             
-            if nargin < 3 || isempty(dpi)
+            if nargin < 3 || isempty(resolution)
                 if obj.highDPI
-                    dpi = 300;
+                    resolution = 300;
                 else
-                    dpi = 150;
+                    resolution = 150;
                 end
             end
             
-            % 检查是否有图形需要保存
             if isempty(obj.figureHandles)
-                obj.logger.warn('没有图形需要保存');
+                obj.logger.warn('没有图形可以保存');
                 return;
             end
             
@@ -672,50 +800,41 @@
                 obj.logger.info('创建保存路径: %s', obj.savePath);
             end
             
-            % 保存每个图形
+            % 遍历所有图形进行保存
             for i = 1:length(obj.figureHandles)
-                try
-                    % 跳过已关闭的图形
-                    if ~isvalid(obj.figureHandles{i})
-                        obj.logger.warn('图形 #%d 已关闭，跳过保存', i);
-                        continue;
-                    end
-                    
-                    % 获取文件名
-                    if i <= length(obj.figuresInfo) && isfield(obj.figuresInfo(i), 'filename') && ...
-                            ~isempty(obj.figuresInfo(i).filename)
-                        baseName = obj.figuresInfo(i).filename;
-                    else
-                        baseName = sprintf('figure_%d', i);
-                    end
-                    
-                    % 构建完整文件名
-                    filename = fullfile(obj.savePath, [baseName, '.', format]);
-                    
-                    % 保存图形
+                if isvalid(obj.figureHandles{i})
                     figure(obj.figureHandles{i});
                     
-                    % 根据格式使用不同的保存选项
-                    switch lower(format)
-                        case 'png'
-                            print(obj.figureHandles{i}, filename, '-dpng', ['-r', num2str(dpi)]);
-                        case 'pdf'
-                            print(obj.figureHandles{i}, filename, '-dpdf', ['-r', num2str(dpi)]);
-                        case 'eps'
-                            print(obj.figureHandles{i}, filename, '-depsc', ['-r', num2str(dpi)]);
-                        case 'svg'
-                            print(obj.figureHandles{i}, filename, '-dsvg', ['-r', num2str(dpi)]);
-                        case 'jpg'
-                            print(obj.figureHandles{i}, filename, '-djpeg', ['-r', num2str(dpi)]);
-                        case 'fig'
-                            savefig(obj.figureHandles{i}, filename);
-                        otherwise
-                            print(obj.figureHandles{i}, filename, '-dpng', ['-r', num2str(dpi)]);
+                    % 构建文件名
+                    if isfield(obj.figuresInfo, 'filename') && length(obj.figuresInfo) >= i
+                        baseName = obj.figuresInfo(i).filename;
+                    else
+                        baseName = sprintf('figure_%02d', i);
                     end
                     
-                    obj.logger.info('保存图形 #%d 到: %s', i, filename);
-                catch ME
-                    obj.logger.error('保存图形 #%d 失败: %s', i, ME.message);
+                    % 添加时间戳（可选）
+                    timestamp = datestr(now, 'yyyymmdd_HHMMSS');
+                    fileName = fullfile(obj.savePath, [baseName, '_', timestamp, '.', format]);
+                    
+                    % 保存图形
+                    switch lower(format)
+                        case 'png'
+                            print(obj.figureHandles{i}, fileName, '-dpng', ['-r', num2str(resolution)]);
+                        case 'pdf'
+                            print(obj.figureHandles{i}, fileName, '-dpdf', ['-r', num2str(resolution)]);
+                        case 'jpg'
+                            print(obj.figureHandles{i}, fileName, '-djpeg', ['-r', num2str(resolution)]);
+                        case 'fig'
+                            savefig(obj.figureHandles{i}, fileName);
+                        case 'svg'
+                            print(obj.figureHandles{i}, fileName, '-dsvg');
+                        case 'eps'
+                            print(obj.figureHandles{i}, fileName, '-depsc');
+                        otherwise
+                            print(obj.figureHandles{i}, fileName, '-dpng', ['-r', num2str(resolution)]);
+                    end
+                    
+                    obj.logger.info('已保存图形: %s', fileName);
                 end
             end
             
@@ -723,21 +842,11 @@
         end
         
         function closeAllFigures(obj)
-            % 关闭所有生成的图形
+            % 关闭所有图形
             
-            % 检查是否有图形需要关闭
-            if isempty(obj.figureHandles)
-                return;
-            end
-            
-            % 关闭每个图形
             for i = 1:length(obj.figureHandles)
-                try
-                    if isvalid(obj.figureHandles{i})
-                        close(obj.figureHandles{i});
-                    end
-                catch
-                    % 忽略已关闭的图形
+                if isvalid(obj.figureHandles{i})
+                    close(obj.figureHandles{i});
                 end
             end
             
@@ -748,333 +857,159 @@
             obj.logger.info('所有图形已关闭');
         end
         
-        function figInfo = getFiguresInfo(obj)
-            % 获取所有图形的信息
+        function figureInfo = getFigureInfo(obj)
+            % 获取图形信息
             %
             % 返回值:
-            %   figInfo - 包含图形信息的结构体数组
+            %   figureInfo - 包含图形信息的结构体数组
             
-            figInfo = obj.figuresInfo;
+            figureInfo = obj.figuresInfo;
         end
         
-        function exportToPowerPoint(obj, filename)
-            % 将所有图形导出到PowerPoint
+        function setColorScheme(obj, scheme)
+            % 设置颜色方案
             %
             % 参数:
-            %   filename - PowerPoint文件名
+            %   scheme - 颜色方案名称或结构体
             
-            % 检查是否有图形需要导出
-            if isempty(obj.figureHandles)
-                obj.logger.warn('没有图形需要导出');
+            if isstruct(scheme)
+                obj.colorScheme = scheme;
+                obj.logger.info('已设置自定义颜色方案');
                 return;
             end
             
-            try
-                % 确保路径存在
-                [filePath, name, ext] = fileparts(filename);
-                if ~isempty(filePath) && ~exist(filePath, 'dir')
-                    mkdir(filePath);
-                end
-                
-                % 如果没有扩展名，添加.pptx
-                if isempty(ext)
-                    filename = [filename, '.pptx'];
-                end
-                
-                % 创建PowerPoint应用程序对象
-                ppt = actxserver('PowerPoint.Application');
-                ppt.Visible = 1;
-                
-                % 添加演示文稿
-                pres = ppt.Presentations.Add;
-                
-                % 对每个图形，添加一张幻灯片
-                for i = 1:length(obj.figureHandles)
-                    try
-                        % 跳过已关闭的图形
-                        if ~isvalid(obj.figureHandles{i})
-                            obj.logger.warn('图形 #%d 已关闭，跳过导出', i);
-                            continue;
-                        end
-                        
-                        % 添加幻灯片
-                        slide = pres.Slides.Add(i, 12); % 12 = ppLayoutTitleOnly
-                        
-                        % 设置标题
-                        if i <= length(obj.figuresInfo) && isfield(obj.figuresInfo(i), 'title') && ...
-                                ~isempty(obj.figuresInfo(i).title)
-                            slide.Shapes.Title.TextFrame.TextRange.Text = obj.figuresInfo(i).title;
-                        else
-                            slide.Shapes.Title.TextFrame.TextRange.Text = sprintf('图形 #%d', i);
-                        end
-                        
-                        % 保存当前图形为临时文件
-                        tempFile = [tempname, '.png'];
-                        figure(obj.figureHandles{i});
-                        print(obj.figureHandles{i}, tempFile, '-dpng', '-r300');
-                        
-                        % 在幻灯片上添加图像
-                        left = slide.Master.Width * 0.1;
-                        top = slide.Master.Height * 0.2;
-                        width = slide.Master.Width * 0.8;
-                        height = slide.Master.Height * 0.6;
-                        
-                        % 添加图像到幻灯片
-                        slide.Shapes.AddPicture(tempFile, 0, 1, left, top, width, height);
-                        
-                        % 添加描述（如果有）
-                        if i <= length(obj.figuresInfo) && isfield(obj.figuresInfo(i), 'description') && ...
-                                ~isempty(obj.figuresInfo(i).description)
-                            bottom = top + height + 10;
-                            descLeft = left;
-                            descWidth = width;
-                            descHeight = slide.Master.Height * 0.1;
-                            
-                            desc = slide.Shapes.AddTextbox(1, descLeft, bottom, descWidth, descHeight);
-                            desc.TextFrame.TextRange.Text = obj.figuresInfo(i).description;
-                            desc.TextFrame.TextRange.Font.Size = 12;
-                        end
-                        
-                        % 删除临时文件
-                        delete(tempFile);
-                    catch ME
-                        obj.logger.error('导出图形 #%d 到PowerPoint失败: %s', i, ME.message);
-                    end
-                end
-                
-                % 保存演示文稿
-                pres.SaveAs(filename);
-                
-                % 关闭PowerPoint
-                pres.Close;
-                ppt.Quit;
-                
-                obj.logger.info('所有图形已导出到PowerPoint: %s', filename);
-            catch ME
-                obj.logger.error('导出到PowerPoint失败: %s', ME.message);
-                
-                % 尝试关闭PowerPoint
-                try
-                    pres.Close;
-                    ppt.Quit;
-                catch
-                    % 忽略
-                end
+            % 预定义的颜色方案
+            switch lower(scheme)
+                case 'default'
+                    obj.colorScheme = struct(...
+                        'primary', [0.2, 0.4, 0.6], ...
+                        'secondary', [0.8, 0.3, 0.3], ...
+                        'tertiary', [0.3, 0.7, 0.4], ...
+                        'light', [0.8, 0.8, 0.8], ...
+                        'dark', [0.2, 0.2, 0.2], ...
+                        'highlight', [1.0, 0.5, 0.0], ...
+                        'gradient', {{'#3288bd', '#99d594', '#e6f598', '#fee08b', '#fc8d59', '#d53e4f'}});
+                case 'colorful'
+                    obj.colorScheme = struct(...
+                        'primary', [0.9, 0.3, 0.3], ...
+                        'secondary', [0.3, 0.7, 0.3], ...
+                        'tertiary', [0.3, 0.3, 0.9], ...
+                        'light', [0.9, 0.9, 0.9], ...
+                        'dark', [0.2, 0.2, 0.2], ...
+                        'highlight', [1.0, 0.8, 0.2], ...
+                        'gradient', {{'#d53e4f', '#fc8d59', '#fee08b', '#e6f598', '#99d594', '#3288bd'}});
+                case 'monochrome'
+                    obj.colorScheme = struct(...
+                        'primary', [0.3, 0.3, 0.3], ...
+                        'secondary', [0.5, 0.5, 0.5], ...
+                        'tertiary', [0.7, 0.7, 0.7], ...
+                        'light', [0.9, 0.9, 0.9], ...
+                        'dark', [0.1, 0.1, 0.1], ...
+                        'highlight', [0.0, 0.0, 0.0], ...
+                        'gradient', {{'#000000', '#333333', '#666666', '#999999', '#cccccc', '#ffffff'}});
+                case 'pastel'
+                    obj.colorScheme = struct(...
+                        'primary', [0.7, 0.8, 0.9], ...
+                        'secondary', [0.9, 0.8, 0.7], ...
+                        'tertiary', [0.8, 0.9, 0.7], ...
+                        'light', [0.95, 0.95, 0.95], ...
+                        'dark', [0.3, 0.3, 0.3], ...
+                        'highlight', [1.0, 0.7, 0.7], ...
+                        'gradient', {{'#8dd3c7', '#ffffb3', '#bebada', '#fb8072', '#80b1d3', '#fdb462'}});
+                otherwise
+                    obj.logger.warn('未知的颜色方案: %s，使用默认方案', scheme);
+                    obj.setColorScheme('default');
             end
+            
+            obj.logger.info('已设置颜色方案: %s', scheme);
+        end
+        
+        function setHighDPI(obj, flag)
+            % 设置是否使用高DPI输出
+            %
+            % 参数:
+            %   flag - 布尔值，true表示使用高DPI输出
+            
+            obj.highDPI = logical(flag);
+            obj.logger.info('高DPI输出设置为: %d', obj.highDPI);
         end
     end
     
     methods (Static)
-        function colors = generateColorGradient(startColor, endColor, steps)
-            % 生成颜色渐变
+        function colors = getDefaultColors(n)
+            % 获取默认的n种颜色
             %
             % 参数:
-            %   startColor - 起始颜色RGB向量
-            %   endColor - 结束颜色RGB向量
-            %   steps - 渐变步数
+            %   n - 颜色数量
             %
             % 返回值:
-            %   colors - 渐变颜色矩阵，行数等于steps
+            %   colors - n×3的颜色矩阵
             
-            startColor = startColor(:)';
-            endColor = endColor(:)';
+            % 默认颜色谱
+            baseColors = [
+                0.0000, 0.4470, 0.7410;  % 蓝色
+                0.8500, 0.3250, 0.0980;  % 红色
+                0.9290, 0.6940, 0.1250;  % 黄色
+                0.4940, 0.1840, 0.5560;  % 紫色
+                0.4660, 0.6740, 0.1880;  % 绿色
+                0.3010, 0.7450, 0.9330;  % 浅蓝
+                0.6350, 0.0780, 0.1840;  % 深红
+                0.0000, 0.0000, 1.0000;  % 纯蓝
+                1.0000, 0.0000, 0.0000;  % 纯红
+                0.0000, 1.0000, 0.0000;  % 纯绿
+                0.7500, 0.7500, 0.0000;  % 橄榄
+                0.7500, 0.0000, 0.7500;  % 洋红
+                0.0000, 0.7500, 0.7500;  % 青色
+                0.7500, 0.7500, 0.7500;  % 灰色
+            ];
             
-            % 线性插值
-            r = linspace(startColor(1), endColor(1), steps);
-            g = linspace(startColor(2), endColor(2), steps);
-            b = linspace(startColor(3), endColor(3), steps);
-            
-            colors = [r', g', b'];
+            % 如果需要的颜色数量大于基础颜色集，则使用插值生成
+            if n <= size(baseColors, 1)
+                colors = baseColors(1:n, :);
+            else
+                % 使用HSV颜色空间均匀分布生成颜色
+                colors = hsv(n);
+            end
         end
         
-        function plotConfusionMatrix(confMat, classes, figTitle)
-            % 绘制混淆矩阵
+        function saveFigureAsImage(fig, fileName, format, resolution)
+            % 保存单个图形为图像文件
             %
             % 参数:
-            %   confMat - 混淆矩阵
-            %   classes - 类别名称元胞数组
-            %   figTitle - 图形标题（可选）
+            %   fig - 图形句柄
+            %   fileName - 文件名（不含扩展名）
+            %   format - 保存格式（默认 'png'）
+            %   resolution - 分辨率（默认 300 dpi）
             
-            if nargin < 3 || isempty(figTitle)
-                figTitle = '混淆矩阵';
+            if nargin < 3 || isempty(format)
+                format = 'png';
             end
             
-            if nargin < 2 || isempty(classes)
-                classes = arrayfun(@(i) sprintf('Class %d', i), ...
-                    1:size(confMat, 1), 'UniformOutput', false);
+            if nargin < 4 || isempty(resolution)
+                resolution = 300;
             end
             
-            % 创建图形
-            figure('Name', figTitle, 'Position', [100, 100, 800, 700]);
+            % 构建完整文件名
+            fullFileName = [fileName, '.', format];
             
-            % 计算准确率
-            confMatNorm = confMat ./ sum(confMat, 2);
-            
-            % 创建热图
-            imagesc(confMatNorm);
-            colormap(jet);
-            colorbar;
-            
-            % 添加数值标签
-            textColors = repmat([1, 1, 1], size(confMat, 1) * size(confMat, 2), 1);
-            textColors(confMatNorm(:) < 0.5, :) = repmat([0, 0, 0], sum(confMatNorm(:) < 0.5), 1);
-            
-            for i = 1:size(confMat, 1)
-                for j = 1:size(confMat, 2)
-                    text(j, i, sprintf('%d\n(%.1f%%)', confMat(i, j), confMatNorm(i, j)*100), ...
-                        'HorizontalAlignment', 'center', ...
-                        'Color', textColors((i-1)*size(confMat, 2) + j, :), ...
-                        'FontWeight', 'bold');
-                end
+            % 保存图形
+            figure(fig);
+            switch lower(format)
+                case 'png'
+                    print(fig, fullFileName, '-dpng', ['-r', num2str(resolution)]);
+                case 'pdf'
+                    print(fig, fullFileName, '-dpdf', ['-r', num2str(resolution)]);
+                case 'jpg'
+                    print(fig, fullFileName, '-djpeg', ['-r', num2str(resolution)]);
+                case 'fig'
+                    savefig(fig, fullFileName);
+                case 'svg'
+                    print(fig, fullFileName, '-dsvg');
+                case 'eps'
+                    print(fig, fullFileName, '-depsc');
+                otherwise
+                    print(fig, fullFileName, '-dpng', ['-r', num2str(resolution)]);
             end
-            
-            % 设置坐标轴和标签
-            xticks(1:length(classes));
-            yticks(1:length(classes));
-            xticklabels(classes);
-            yticklabels(classes);
-            xtickangle(45);
-            
-            xlabel('预测类别');
-            ylabel('实际类别');
-            title(figTitle);
-            
-            % 美化图形
-            axis square;
-            set(gca, 'FontSize', 11, 'FontWeight', 'bold', 'Box', 'on');
         end
     end
-endclassdef ResultVisualizer < handle
-    % ResultVisualizer - 模型结果可视化
-    %
-    % 该类负责将模型的各种结果以图形化方式展示，包括系数图、
-    % 拟合优度图、残差诊断图、变量重要性图等。
-    %
-    % 属性:
-    %   logger - 日志记录器对象
-    %   modelResults - 模型结果结构体
-    %   figureHandles - 生成的图形句柄
-    %   figureCounter - 图形计数器
-    %   figuresInfo - 图形信息记录
-    %   colorScheme - 颜色方案
-    %   savePath - 图形保存路径
-    %   highDPI - 是否使用高DPI输出
-    
-    properties
-        logger            % 日志记录器
-        modelResults      % 模型结果结构体
-        figureHandles     % 生成的图形句柄
-        figureCounter     % 图形计数器
-        figuresInfo       % 图形信息记录
-        colorScheme       % 颜色方案
-        savePath          % 图形保存路径
-        highDPI           % 是否使用高DPI输出
-    end
-    
-    methods
-        function obj = ResultVisualizer(logger, colorScheme)
-            % 构造函数
-            %
-            % 参数:
-            %   logger - BinomialLogger实例
-            %   colorScheme - 颜色方案（可选）
-            
-            if nargin < 1 || isempty(logger)
-                obj.logger = BinomialLogger.getLogger('ResultVisualizer');
-            else
-                obj.logger = logger;
-            end
-            
-            if nargin < 2 || isempty(colorScheme)
-                % 默认颜色方案
-                obj.colorScheme = struct(...
-                    'primary', [0.2, 0.4, 0.6], ...
-                    'secondary', [0.8, 0.3, 0.3], ...
-                    'tertiary', [0.3, 0.7, 0.4], ...
-                    'light', [0.8, 0.8, 0.8], ...
-                    'dark', [0.2, 0.2, 0.2], ...
-                    'highlight', [1.0, 0.5, 0.0], ...
-                    'gradient', {{'#3288bd', '#99d594', '#e6f598', '#fee08b', '#fc8d59', '#d53e4f'}});
-            else
-                obj.colorScheme = colorScheme;
-            end
-            
-            obj.figureHandles = {};
-            obj.figureCounter = 0;
-            obj.figuresInfo = struct('title', {}, 'description', {}, 'filename', {});
-            obj.savePath = pwd;
-            obj.highDPI = true;
-            
-            obj.logger.info('结果可视化模块已初始化');
-        end
-        
-        function setModelResults(obj, modelResults)
-            % 设置模型结果
-            %
-            % 参数:
-            %   modelResults - 包含模型分析结果的结构体
-            
-            obj.modelResults = modelResults;
-            obj.logger.debug('模型结果已设置');
-        end
-        
-        function setSavePath(obj, path)
-            % 设置图形保存路径
-            %
-            % 参数:
-            %   path - 图形保存路径
-            
-            if exist(path, 'dir') || mkdir(path)
-                obj.savePath = path;
-                obj.logger.info('图形保存路径已设置为: %s', path);
-            else
-                obj.logger.error('无法创建或访问路径: %s', path);
-            end
-        end
-        
-        function plotCoefficientEstimates(obj, coefficients, stdErrors, names, figTitle)
-            % 绘制系数估计及置信区间
-            %
-            % 参数:
-            %   coefficients - 系数向量
-            %   stdErrors - 标准误向量
-            %   names - 变量名称元胞数组（可选）
-            %   figTitle - 图形标题（可选）
-            
-            if nargin < 5 || isempty(figTitle)
-                figTitle = '系数估计与置信区间';
-            end
-            
-            if nargin < 4 || isempty(names)
-                names = arrayfun(@(i) sprintf('Var %d', i), ...
-                    1:length(coefficients), 'UniformOutput', false);
-            end
-            
-            % 创建图形
-            fig = figure('Name', figTitle, 'Position', [100, 100, 800, 600]);
-            obj.figureCounter = obj.figureCounter + 1;
-            obj.figureHandles{obj.figureCounter} = fig;
-            
-            % 计算95%置信区间
-            ci95 = 1.96 * stdErrors;
-            
-            % 按系数绝对值排序
-            [~, idx] = sort(abs(coefficients), 'descend');
-            sortedCoefs = coefficients(idx);
-            sortedErrors = ci95(idx);
-            sortedNames = names(idx);
-            
-            % 创建水平条形图
-            barh(sortedCoefs, 'FaceColor', obj.colorScheme.primary);
-            
-            % 添加误差线
-            hold on;
-            errorbar(sortedCoefs, 1:length(sortedCoefs), sortedErrors, sortedErrors, '.', ...
-                'Color', obj.colorScheme.secondary, 'LineWidth', 1.5, 'CapSize', 10, ...
-                'Marker', 'none', 'LineStyle', 'none');
-            
-            % 添加零线
-            plot([0, 0], [0, length(sortedCoefs)+1], '--', 'Color', obj.colorScheme.dark, 'LineWidth', 1);
-            hold off;
-            
-            %
+end

@@ -7,6 +7,7 @@ function Binomial(filename)
 %   filename - 包含数据的.mat文件路径
 % 示例:
 %   Binomial('mydata.mat');
+% https://github.com/La-Petite-Princess/Binomial/archive/refs/heads/main.zip
 
 % 开始计时
 tic;
@@ -3688,7 +3689,7 @@ for m = 1:length(methods)
         set(gcf, 'Color', 'white');
                 
         % 保存矢量图
-        save_figure(fig, figure_dir, '_coefficient_stability', 'MethodName', method);
+        save_figure(fig, figure_dir, sprintf('%s_coefficient_stability', method), 'Formats', {'svg'});
         
         % 关闭图形
         close(fig);
@@ -4923,29 +4924,16 @@ end
 
 %% 图形保存函数
 function save_figure(fig, output_dir, filename_base, varargin)
-% 统一的图形保存函数，支持多种格式和高级选项
-% 输入:
-%   fig - 图形句柄
-%   output_dir - 输出目录
-%   filename_base - 基本文件名（可包含%s，将被method_name替换）
-% 可选命名参数:
-%   'Formats' - 要保存的格式列表，默认为 {'png', 'pdf'}
-%   'DPI' - 分辨率，默认为300
-%   'MethodName' - 方法名称，用于替换文件名中的%s
-%   'BestFit' - 是否使用最佳适配选项，默认为true
-
     % 解析输入参数
     p = inputParser;
     addParameter(p, 'Formats', {'svg'}, @(x) iscell(x) || ischar(x));
     addParameter(p, 'DPI', 300, @isnumeric);
     addParameter(p, 'MethodName', '', @ischar);
-    addParameter(p, 'BestFit', true, @islogical);
     parse(p, varargin{:});
     
     formats = p.Results.Formats;
     dpi = p.Results.DPI;
     method_name = p.Results.MethodName;
-    use_bestfit = p.Results.BestFit;
     
     % 如果formats是字符串，转换为cell数组
     if ischar(formats)
@@ -4960,7 +4948,7 @@ function save_figure(fig, output_dir, filename_base, varargin)
     % 处理文件名中的方法名称替换
     if contains(filename_base, '%s')
         if ~isempty(method_name)
-            actual_filename = strrep(filename_base, '%s', method_name);
+            actual_filename = sprintf(filename_base, method_name);
         else
             actual_filename = strrep(filename_base, '%s', 'unknown');
             log_message('warning', '文件名中包含%s但未提供method_name');
@@ -4972,25 +4960,8 @@ function save_figure(fig, output_dir, filename_base, varargin)
     % 准备图形
     set(fig, 'Color', 'white');
     
-    % 优化图例和文本位置
-    ax = findall(fig, 'Type', 'Axes');
-    for i = 1:length(ax)
-        % 获取图例对象
-        leg = findobj(ax(i), 'Type', 'Legend');
-        if ~isempty(leg)
-            % 确保图例处于最佳位置
-            leg.FontSize = max(leg.FontSize, 9);
-        end
-        
-        % 确保轴标签清晰可见
-        ax(i).FontSize = max(ax(i).FontSize, 9); % 确保字体足够大
-    end
-    
-    % 设置纸张属性
-    set(fig, 'PaperPositionMode', 'manual');
-    set(fig, 'PaperUnits', 'inches');
-    set(fig, 'PaperSize', [10 8]); % 设置为 10x8 英寸
-    set(fig, 'PaperPosition', [0 0 10 8]);
+    % 检查是否存在exportgraphics函数(R2020a或更高版本)
+    has_exportgraphics = exist('exportgraphics', 'file') == 2;
     
     % 初始化成功保存的格式列表
     successful_formats = {};
@@ -5001,31 +4972,38 @@ function save_figure(fig, output_dir, filename_base, varargin)
         filename = fullfile(output_dir, [actual_filename '.' format]);
         
         try
-            % 根据不同的格式选择不同的保存方法
-            switch format
-                case {'png', 'jpg', 'jpeg', 'tiff', 'bmp'}
-                    % 位图格式
-                    print(fig, filename, ['-d' format], ['-r' num2str(dpi)]);
-                    
-                case 'pdf'
-                    % PDF格式
-                    if use_bestfit
+            if has_exportgraphics
+                % 使用exportgraphics函数(适用于R2020a或更高版本)
+                switch format
+                    case {'png', 'jpg', 'jpeg', 'tiff', 'bmp'}
+                        % 位图格式
+                        exportgraphics(fig, filename, 'Resolution', dpi);
+                    case {'pdf', 'eps', 'svg'}
+                        % 矢量格式
+                        exportgraphics(fig, filename, 'ContentType', 'vector');
+                    otherwise
+                        % 其他格式回退到saveas
+                        saveas(fig, filename);
+                end
+            else
+                % 回退到传统方法
+                % 禁用工具栏和菜单栏
+                set(fig, 'Toolbar', 'none');
+                set(fig, 'MenuBar', 'none');
+                
+                % 根据不同的格式选择不同的保存方法
+                switch format
+                    case {'png', 'jpg', 'jpeg', 'tiff', 'bmp'}
+                        print(fig, filename, ['-d' format], ['-r' num2str(dpi)]);
+                    case 'pdf'
                         print(fig, filename, '-dpdf', '-bestfit');
-                    else
-                        print(fig, filename, '-dpdf');
-                    end
-                    
-                case 'eps'
-                    % EPS格式
-                    print(fig, filename, '-depsc2');
-                    
-                case 'svg'
-                    % SVG格式
-                    print(fig, filename, '-dsvg');
-                    
-                otherwise
-                    % 其他格式
-                    saveas(fig, filename);
+                    case 'eps'
+                        print(fig, filename, '-depsc2');
+                    case 'svg'
+                        print(fig, filename, '-dsvg');
+                    otherwise
+                        saveas(fig, filename);
+                end
             end
             
             successful_formats{end+1} = upper(format);
@@ -5036,7 +5014,6 @@ function save_figure(fig, output_dir, filename_base, varargin)
             
             % 尝试备用方法
             try
-                % 备用保存方法
                 saveas(fig, filename);
                 successful_formats{end+1} = upper(format);
             catch ME2
@@ -5047,36 +5024,11 @@ function save_figure(fig, output_dir, filename_base, varargin)
     
     % 输出汇总日志消息
     if ~isempty(successful_formats)
-        % 获取没有路径的文件名基础部分
-        [~, file_basename, ~] = fileparts(actual_filename);
-        
-        % 格式化成功保存的格式列表
         formats_str = strjoin(successful_formats, ', ');
-        
-        % 如果是调试级别，只记录一条简短的日志
-        log_level = get_log_level();
-        if strcmpi(log_level, 'debug')
-            log_message('debug', sprintf('保存图形: %s (%s)', file_basename, formats_str));
-        else
-            % 对于其他级别，只记录一条简短的信息日志
-            log_message('info', sprintf('图形已保存: %s (%s)', file_basename, formats_str));
-        end
+        log_message('info', sprintf('图形已保存: %s (%s)', actual_filename, formats_str));
     else
-        % 如果没有任何格式保存成功
         log_message('error', ['图形保存失败: ' actual_filename]);
     end
-end
-
-% 辅助函数
-function save_vector_graphic(fig, output_dir, filename_base)
-% 保存矢量图（向后兼容）
-% 输入:
-%   fig - 图形句柄
-%   output_dir - 输出目录
-%   filename_base - 基本文件名
-
-    % 调用统一的保存函数，指定矢量格式
-    save_figure(fig, output_dir, filename_base, 'Formats', {'svg'});
 end
 
 %% 创建增强综合报告 - 新增

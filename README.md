@@ -103,3 +103,18 @@ https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/Binomial_40/R
 https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/Binomial_40/Binomial.m
 
 
+# Binomial_41
+
+https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/Binomial_41/Binomial.m
+
+https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/Binomial_41/data_module.m
+
+https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/Binomial_41/feature_module.m
+
+https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/Binomial_41/logger.m
+
+https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/Binomial_41/parallel_module.m
+
+https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/Binomial_41/reporting_module.m
+
+https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/Binomial_41/visualization_module.m

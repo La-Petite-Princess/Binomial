@@ -2061,4 +2061,661 @@ classdef reporting_module
             end
         end
 
+        function create_enhanced_summary_report(results, methods, var_names, cv_results, coef_stability, param_stats, var_contribution, report_dir)
+            % 创建增强综合报告
+            % 输入:
+            %   results - 结果结构
+            %   methods - 方法名称
+            %   var_names - 变量名称
+            %   cv_results - 交叉验证结果
+            %   coef_stability - 系数稳定性
+            %   param_stats - 参数统计
+            %   var_contribution - 变量贡献
+            %   report_dir - 报告保存目录
+            
+            % 获取当前时间戳
+            timestamp = datestr(now, 'yyyymmdd_HHMMSS');
+            
+            % 创建报告文件名
+            report_file = fullfile(report_dir, sprintf('enhanced_summary_report_%s.html', timestamp));
+            
+            % 创建时间字符串
+            time_str = datestr(now, 'yyyy年mm月dd日 HH:MM:SS');
+            
+            % 打开文件
+            fid = fopen(report_file, 'w', 'n', 'utf-8');
+            if fid < 0
+                logger.log_message('error', sprintf('无法创建报告文件:%s', report_file));
+                return;
+            end
+            
+            try
+                % HTML头部
+                fprintf(fid, '<!DOCTYPE html>\n');
+                fprintf(fid, '<html lang="zh-CN">\n');
+                fprintf(fid, '<head>\n');
+                fprintf(fid, '    <meta charset="UTF-8">\n');
+                fprintf(fid, '    <meta name="viewport" content="width=device-width, initial-scale=1.0">\n');
+                fprintf(fid, '    <title>Binomial分析增强报告</title>\n');
+                fprintf(fid, '    <style>\n');
+                fprintf(fid, '        body { font-family: Arial, sans-serif; margin: 20px; padding: 0; color: #333; line-height: 1.6; }\n');
+                fprintf(fid, '        h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }\n');
+                fprintf(fid, '        h2 { color: #2980b9; margin-top: 30px; border-bottom: 1px solid #ddd; padding-bottom: 5px; }\n');
+                fprintf(fid, '        h3 { color: #3498db; margin-top: 25px; }\n');
+                fprintf(fid, '        table { border-collapse: collapse; width: 100%%; margin: 20px 0; box-shadow: 0 2px 3px rgba(0,0,0,0.1); }\n');
+                fprintf(fid, '        th { background-color: #3498db; color: white; font-weight: bold; padding: 12px; text-align: left; }\n');
+                fprintf(fid, '        td { border: 1px solid #ddd; padding: 8px; }\n');
+                fprintf(fid, '        tr:nth-child(even) { background-color: #f2f2f2; }\n');
+                fprintf(fid, '        tr:hover { background-color: #e6f7ff; }\n');
+                fprintf(fid, '        .highlight { background-color: #fff9c4; }\n');
+                fprintf(fid, '        .method-section { margin-bottom: 40px; border: 1px solid #ddd; padding: 15px; border-radius: 5px; }\n');
+                fprintf(fid, '        .summary-card { display: inline-block; width: 30%%; margin: 10px 1%%; padding: 15px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); border-radius: 5px; }\n');
+                fprintf(fid, '        .positive { color: #27ae60; }\n');
+                fprintf(fid, '        .negative { color: #e74c3c; }\n');
+                fprintf(fid, '        .warning { color: #f39c12; }\n');
+                fprintf(fid, '        .conclusion { background-color: #eaf7fd; padding: 15px; border-left: 4px solid #3498db; margin: 20px 0; }\n');
+                fprintf(fid, '        .footer { margin-top: 50px; text-align: center; font-size: 12px; color: #7f8c8d; }\n');
+                fprintf(fid, '    </style>\n');
+                fprintf(fid, '</head>\n');
+                fprintf(fid, '<body>\n');
+                
+                % 报告标题
+                fprintf(fid, '    <h1>Binomial分析增强报告</h1>\n');
+                fprintf(fid, '    <p>生成时间: %s</p>\n', time_str);
+                
+                % 1. 执行摘要
+                fprintf(fid, '    <h2>1. 执行摘要</h2>\n');
+                
+                % 创建摘要卡片
+                fprintf(fid, '    <div style="display: flex; flex-wrap: wrap; justify-content: space-between;">\n');
+                
+                % 方法数量卡片
+                fprintf(fid, '        <div class="summary-card" style="background-color: #e8f4f8;">\n');
+                fprintf(fid, '            <h3 style="color: #2980b9;">分析方法</h3>\n');
+                fprintf(fid, '            <p style="font-size: 24px; font-weight: bold;">%d</p>\n', length(methods));
+                fprintf(fid, '            <p>使用了%d种不同的变量选择方法</p>\n', length(methods));
+                fprintf(fid, '        </div>\n');
+                
+                % 变量数量卡片
+                fprintf(fid, '        <div class="summary-card" style="background-color: #f0f7f0;">\n');
+                fprintf(fid, '            <h3 style="color: #27ae60;">变量数量</h3>\n');
+                fprintf(fid, '            <p style="font-size: 24px; font-weight: bold;">%d</p>\n', length(var_names));
+                fprintf(fid, '            <p>分析中包含%d个潜在预测变量</p>\n', length(var_names));
+                fprintf(fid, '        </div>\n');
+                
+                % 最佳性能卡片
+                % 找出具有最高F1分数的方法
+                best_f1 = 0;
+                best_method = '';
+                for i = 1:length(methods)
+                    method = methods{i};
+                    if isfield(results.(method).performance, 'avg_f1_score')
+                        f1 = results.(method).performance.avg_f1_score;
+                        if f1 > best_f1
+                            best_f1 = f1;
+                            best_method = method;
+                        end
+                    end
+                end
+                
+                fprintf(fid, '        <div class="summary-card" style="background-color: #fff5e6;">\n');
+                fprintf(fid, '            <h3 style="color: #e67e22;">最佳性能</h3>\n');
+                fprintf(fid, '            <p style="font-size: 24px; font-weight: bold;">%s</p>\n', best_method);
+                fprintf(fid, '            <p>F1分数: %.3f</p>\n', best_f1);
+                fprintf(fid, '        </div>\n');
+                
+                fprintf(fid, '    </div>\n');
+                
+                % 方法比较摘要
+                fprintf(fid, '    <div class="conclusion">\n');
+                fprintf(fid, '        <h3>关键发现</h3>\n');
+                fprintf(fid, '        <ul>\n');
+                
+                % 查找AIC最低的方法
+                aic_table = reporting_module.create_aic_bic_table(results, methods);
+                min_aic_method = aic_table.Method{1};  % 已经按AIC排序
+                
+                fprintf(fid, '            <li><strong>最优模型：</strong> 根据F1分数，<span class="highlight">%s</span>方法表现最佳(%.3f)，而根据AIC，<span class="highlight">%s</span>方法表现最佳。</li>\n', 
+                    best_method, best_f1, min_aic_method);
+                
+                % 如果有交叉验证结果
+                if ~isempty(cv_results) && isfield(cv_results, 'f1_score')
+                    mean_cv_f1 = mean(cv_results.f1_score, 'omitnan');
+                    std_cv_f1 = std(cv_results.f1_score, 'omitnan');
+                    fprintf(fid, '            <li><strong>交叉验证：</strong> K折交叉验证的平均F1分数为%.3f(±%.3f)，表明模型的<span class="%s">%s稳定性</span>。</li>\n',
+                        mean_cv_f1, std_cv_f1, (std_cv_f1 < 0.1 ? 'positive' : 'warning'), (std_cv_f1 < 0.1 ? '良好' : '一般'));
+                end
+                
+                % 变量重要性
+                if isfield(var_contribution, 'overall_importance')
+                    imp_table = var_contribution.overall_importance;
+                    if height(imp_table) >= 3
+                        top3_vars = imp_table.Variable(1:3);
+                        fprintf(fid, '            <li><strong>关键变量：</strong> 三个最重要的预测变量是 <span class="highlight">%s</span>、<span class="highlight">%s</span> 和 <span class="highlight">%s</span>。</li>\n',
+                            top3_vars{1}, top3_vars{2}, top3_vars{3});
+                    end
+                end
+                
+                fprintf(fid, '        </ul>\n');
+                fprintf(fid, '    </div>\n');
+                
+                % 2. 性能比较
+                fprintf(fid, '    <h2>2. 性能比较</h2>\n');
+                
+                % 创建性能比较表
+                perf_table = reporting_module.create_performance_detail_table(results, methods);
+                
+                fprintf(fid, '    <div style="overflow-x: auto;">\n');
+                fprintf(fid, '        <table>\n');
+                fprintf(fid, '            <tr>\n');
+                fprintf(fid, '                <th>方法</th>\n');
+                fprintf(fid, '                <th>准确率</th>\n');
+                fprintf(fid, '                <th>精确率</th>\n');
+                fprintf(fid, '                <th>召回率</th>\n');
+                fprintf(fid, '                <th>特异性</th>\n');
+                fprintf(fid, '                <th>F1分数</th>\n');
+                fprintf(fid, '                <th>AUC</th>\n');
+                fprintf(fid, '            </tr>\n');
+                
+                for i = 1:height(perf_table)
+                    fprintf(fid, '            <tr>\n');
+                    fprintf(fid, '                <td>%s</td>\n', perf_table.Method{i});
+                    fprintf(fid, '                <td>%.3f ± %.3f</td>\n', perf_table.Accuracy_Mean(i), perf_table.Accuracy_StdDev(i));
+                    fprintf(fid, '                <td>%.3f ± %.3f</td>\n', perf_table.Precision_Mean(i), perf_table.Precision_StdDev(i));
+                    fprintf(fid, '                <td>%.3f ± %.3f</td>\n', perf_table.Recall_Mean(i), perf_table.Recall_StdDev(i));
+                    fprintf(fid, '                <td>%.3f ± %.3f</td>\n', perf_table.Specificity_Mean(i), perf_table.Specificity_StdDev(i));
+                    fprintf(fid, '                <td>%.3f ± %.3f</td>\n', perf_table.F1_Score_Mean(i), perf_table.F1_Score_StdDev(i));
+                    fprintf(fid, '                <td>%.3f ± %.3f</td>\n', perf_table.AUC_Mean(i), perf_table.AUC_StdDev(i));
+                    fprintf(fid, '            </tr>\n');
+                end
+                
+                fprintf(fid, '        </table>\n');
+                fprintf(fid, '    </div>\n');
+                
+                % AIC和BIC比较
+                fprintf(fid, '    <h3>信息准则比较</h3>\n');
+                fprintf(fid, '    <div style="overflow-x: auto;">\n');
+                fprintf(fid, '        <table>\n');
+                fprintf(fid, '            <tr>\n');
+                fprintf(fid, '                <th>方法</th>\n');
+                fprintf(fid, '                <th>参数数量</th>\n');
+                fprintf(fid, '                <th>AIC</th>\n');
+                fprintf(fid, '                <th>AIC标准差</th>\n');
+                fprintf(fid, '                <th>BIC</th>\n');
+                fprintf(fid, '                <th>BIC标准差</th>\n');
+                fprintf(fid, '            </tr>\n');
+                
+                for i = 1:height(aic_table)
+                    fprintf(fid, '            <tr>\n');
+                    fprintf(fid, '                <td>%s</td>\n', aic_table.Method{i});
+                    fprintf(fid, '                <td>%d</td>\n', aic_table.NumParams(i));
+                    fprintf(fid, '                <td>%.2f</td>\n', aic_table.AIC(i));
+                    fprintf(fid, '                <td>%.2f</td>\n', aic_table.AIC_StdDev(i));
+                    fprintf(fid, '                <td>%.2f</td>\n', aic_table.BIC(i));
+                    fprintf(fid, '                <td>%.2f</td>\n', aic_table.BIC_StdDev(i));
+                    fprintf(fid, '            </tr>\n');
+                end
+                
+                fprintf(fid, '        </table>\n');
+                fprintf(fid, '    </div>\n');
+                
+                % 3. 变量重要性分析
+                fprintf(fid, '    <h2>3. 变量重要性分析</h2>\n');
+                
+                % 变量选择频率表
+                var_freq_table = reporting_module.create_var_freq_table(results, methods);
+                
+                fprintf(fid, '    <h3>变量选择频率</h3>\n');
+                fprintf(fid, '    <div style="overflow-x: auto;">\n');
+                fprintf(fid, '        <table>\n');
+                fprintf(fid, '            <tr>\n');
+                fprintf(fid, '                <th>变量名</th>\n');
+                
+                for i = 1:length(methods)
+                    fprintf(fid, '                <th>%s</th>\n', methods{i});
+                end
+                
+                fprintf(fid, '                <th>平均频率</th>\n');
+                fprintf(fid, '            </tr>\n');
+                
+                % 显示前15个变量
+                top_n = min(15, height(var_freq_table));
+                for i = 1:top_n
+                    fprintf(fid, '            <tr>\n');
+                    fprintf(fid, '                <td>%s</td>\n', var_freq_table.VariableName{i});
+                    
+                    for j = 1:length(methods)
+                        method = methods{j};
+                        fprintf(fid, '                <td>%.2f</td>\n', var_freq_table.(method)(i));
+                    end
+                    
+                    fprintf(fid, '                <td>%.2f</td>\n', var_freq_table.Average(i));
+                    fprintf(fid, '            </tr>\n');
+                end
+                
+                fprintf(fid, '        </table>\n');
+                fprintf(fid, '    </div>\n');
+                
+                % 综合变量重要性
+                if isfield(var_contribution, 'overall_importance')
+                    fprintf(fid, '    <h3>综合变量重要性</h3>\n');
+                    fprintf(fid, '    <div style="overflow-x: auto;">\n');
+                    fprintf(fid, '        <table>\n');
+                    fprintf(fid, '            <tr>\n');
+                    fprintf(fid, '                <th>变量名</th>\n');
+                    fprintf(fid, '                <th>归一化重要性 (%)</th>\n');
+                    fprintf(fid, '                <th>可视化</th>\n');
+                    fprintf(fid, '            </tr>\n');
+                    
+                    top_n = min(15, height(var_contribution.overall_importance));
+                    for i = 1:top_n
+                        var_name = var_contribution.overall_importance.Variable{i};
+                        importance = var_contribution.overall_importance.Normalized_Importance(i);
+                        
+                        fprintf(fid, '            <tr>\n');
+                        fprintf(fid, '                <td>%s</td>\n', var_name);
+                        fprintf(fid, '                <td>%.2f</td>\n', importance);
+                        fprintf(fid, '                <td><div style="background-color: #3498db; width: %d%%; height: 20px;"></div></td>\n', round(importance));
+                        fprintf(fid, '            </tr>\n');
+                    end
+                    
+                    fprintf(fid, '        </table>\n');
+                    fprintf(fid, '    </div>\n');
+                end
+                
+                % 4. 每种方法的详细分析
+                fprintf(fid, '    <h2>4. 每种方法的详细分析</h2>\n');
+                
+                for i = 1:length(methods)
+                    method = methods{i};
+                    
+                    fprintf(fid, '    <div class="method-section">\n');
+                    fprintf(fid, '        <h3>%s方法</h3>\n', method);
+                    
+                    % 性能摘要
+                    if isfield(results.(method).performance, 'avg_accuracy')
+                        fprintf(fid, '        <p><strong>性能摘要：</strong> 准确率 = %.3f, F1分数 = %.3f, AUC = %.3f</p>\n',
+                            results.(method).performance.avg_accuracy,
+                            results.(method).performance.avg_f1_score,
+                            results.(method).performance.avg_auc);
+                    end
+                    
+                    % 变量组合
+                    fprintf(fid, '        <h4>最常见变量组合</h4>\n');
+                    
+                    if isfield(results.(method), 'group_performance') && ~isempty(results.(method).group_performance)
+                        group_perf = results.(method).group_performance;
+                        
+                        fprintf(fid, '        <div style="overflow-x: auto;">\n');
+                        fprintf(fid, '            <table>\n');
+                        fprintf(fid, '                <tr>\n');
+                        fprintf(fid, '                    <th>变量组合</th>\n');
+                        fprintf(fid, '                    <th>出现次数</th>\n');
+                        fprintf(fid, '                    <th>准确率</th>\n');
+                        fprintf(fid, '                    <th>敏感性</th>\n');
+                        fprintf(fid, '                    <th>特异性</th>\n');
+                        fprintf(fid, '                    <th>精确率</th>\n');
+                        fprintf(fid, '                    <th>F1分数</th>\n');
+                        fprintf(fid, '                    <th>AUC</th>\n');
+                        fprintf(fid, '                </tr>\n');
+                        
+                        % 显示前3个最常见的组合
+                        top_n = min(3, length(group_perf));
+                        for j = 1:top_n
+                            combo = group_perf(j);
+                            var_str = strjoin(cellfun(@(x) x, combo.variables, 'UniformOutput', false), ', ');
+                            
+                            fprintf(fid, '                <tr>\n');
+                            fprintf(fid, '                    <td>%s</td>\n', var_str);
+                            fprintf(fid, '                    <td>%d</td>\n', combo.count);
+                            fprintf(fid, '                    <td>%.3f</td>\n', combo.accuracy);
+                            fprintf(fid, '                    <td>%.3f</td>\n', combo.sensitivity);
+                            fprintf(fid, '                    <td>%.3f</td>\n', combo.specificity);
+                            fprintf(fid, '                    <td>%.3f</td>\n', combo.precision);
+                            fprintf(fid, '                    <td>%.3f</td>\n', combo.f1_score);
+                            fprintf(fid, '                    <td>%.3f</td>\n', combo.auc);
+                            fprintf(fid, '                </tr>\n');
+                        end
+                        
+                        fprintf(fid, '            </table>\n');
+                        fprintf(fid, '        </div>\n');
+                    else
+                        fprintf(fid, '        <p>没有可用的变量组合信息。</p>\n');
+                    end
+                    
+                    % 系数稳定性
+                    fprintf(fid, '        <h4>系数稳定性</h4>\n');
+                    
+                    if isfield(coef_stability, method) && isfield(coef_stability.(method), 'table')
+                        coef_table = coef_stability.(method).table;
+                        
+                        fprintf(fid, '        <div style="overflow-x: auto;">\n');
+                        fprintf(fid, '            <table>\n');
+                        fprintf(fid, '                <tr>\n');
+                        fprintf(fid, '                    <th>变量</th>\n');
+                        fprintf(fid, '                    <th>平均系数</th>\n');
+                        fprintf(fid, '                    <th>标准差</th>\n');
+                        fprintf(fid, '                    <th>变异系数(CV)</th>\n');
+                        fprintf(fid, '                    <th>稳定性</th>\n');
+                        fprintf(fid, '                </tr>\n');
+                        
+                        for j = 1:height(coef_table)
+                            var_name = coef_table.Variable{j};
+                            mean_val = coef_table.Mean(j);
+                            std_val = coef_table.StdDev(j);
+                            cv_val = coef_table.CV(j);
+                            
+                            % 确定稳定性等级
+                            if cv_val < 0.3
+                                stability = '<span class="positive">高稳定性</span>';
+                            elseif cv_val < 0.5
+                                stability = '<span class="warning">中等稳定性</span>';
+                            else
+                                stability = '<span class="negative">低稳定性</span>';
+                            end
+                            
+                            fprintf(fid, '                <tr>\n');
+                            fprintf(fid, '                    <td>%s</td>\n', var_name);
+                            fprintf(fid, '                    <td>%.4f</td>\n', mean_val);
+                            fprintf(fid, '                    <td>%.4f</td>\n', std_val);
+                            fprintf(fid, '                    <td>%.3f</td>\n', cv_val);
+                            fprintf(fid, '                    <td>%s</td>\n', stability);
+                            fprintf(fid, '                </tr>\n');
+                        end
+                        
+                        fprintf(fid, '            </table>\n');
+                        fprintf(fid, '        </div>\n');
+                    else
+                        fprintf(fid, '        <p>没有可用的系数稳定性信息。</p>\n');
+                    end
+                    
+                    % 变量贡献
+                    fprintf(fid, '        <h4>变量贡献</h4>\n');
+                    
+                    if isfield(var_contribution, 'methods') && isfield(var_contribution.methods, method) && ...
+                       isfield(var_contribution.methods.(method), 'contribution_table')
+                        
+                        contrib_table = var_contribution.methods.(method).contribution_table;
+                        
+                        fprintf(fid, '        <div style="overflow-x: auto;">\n');
+                        fprintf(fid, '            <table>\n');
+                        fprintf(fid, '                <tr>\n');
+                        fprintf(fid, '                    <th>变量</th>\n');
+                        fprintf(fid, '                    <th>相对贡献 (%)</th>\n');
+                        
+                        % 检查是否有方向信息
+                        has_direction = false;
+                        if isfield(contrib_table.Properties.VariableNames, 'Effect_Direction')
+                            has_direction = true;
+                            fprintf(fid, '                    <th>影响方向</th>\n');
+                        end
+                        
+                        fprintf(fid, '                    <th>可视化</th>\n');
+                        fprintf(fid, '                </tr>\n');
+                        
+                        top_n = min(10, height(contrib_table));
+                        for j = 1:top_n
+                            var_name = contrib_table.Variable{j};
+                            contrib = contrib_table.Relative_Contribution(j);
+                            
+                            fprintf(fid, '                <tr>\n');
+                            fprintf(fid, '                    <td>%s</td>\n', var_name);
+                            fprintf(fid, '                    <td>%.2f</td>\n', contrib);
+                            
+                            % 添加方向信息（如果有）
+                            if has_direction
+                                direction = contrib_table.Effect_Direction{j};
+                                if strcmp(direction, '正向')
+                                    fprintf(fid, '                    <td><span class="positive">正向</span></td>\n');
+                                else
+                                    fprintf(fid, '                    <td><span class="negative">负向</span></td>\n');
+                                end
+                            end
+                            
+                            % 根据方向使用不同颜色
+                            if has_direction && strcmp(contrib_table.Effect_Direction{j}, '正向')
+                                fprintf(fid, '                    <td><div style="background-color: #27ae60; width: %d%%; height: 20px;"></div></td>\n', round(contrib));
+                            else
+                                fprintf(fid, '                    <td><div style="background-color: #e74c3c; width: %d%%; height: 20px;"></div></td>\n', round(contrib));
+                            end
+                            
+                            fprintf(fid, '                </tr>\n');
+                        end
+                        
+                        fprintf(fid, '            </table>\n');
+                        fprintf(fid, '        </div>\n');
+                    else
+                        fprintf(fid, '        <p>没有可用的变量贡献信息。</p>\n');
+                    end
+                    
+                    fprintf(fid, '    </div>\n');
+                end
+                
+                % 5. 交叉验证分析
+                fprintf(fid, '    <h2>5. 交叉验证分析</h2>\n');
+                
+                if ~isempty(cv_results) && isfield(cv_results, 'accuracy')
+                    % 创建表格
+                    cv_table = reporting_module.create_cv_results_table(cv_results);
+                    
+                    fprintf(fid, '    <div style="overflow-x: auto;">\n');
+                    fprintf(fid, '        <table>\n');
+                    fprintf(fid, '            <tr>\n');
+                    fprintf(fid, '                <th>折数</th>\n');
+                    fprintf(fid, '                <th>准确率</th>\n');
+                    fprintf(fid, '                <th>精确率</th>\n');
+                    fprintf(fid, '                <th>召回率</th>\n');
+                    fprintf(fid, '                <th>特异性</th>\n');
+                    fprintf(fid, '                <th>F1分数</th>\n');
+                    fprintf(fid, '                <th>AUC</th>\n');
+                    fprintf(fid, '            </tr>\n');
+                    
+                    for i = 1:height(cv_table)
+                        fold = cv_table.Fold(i);
+                        
+                        % 根据折数格式化行
+                        if fold == 0
+                            fprintf(fid, '            <tr style="font-weight: bold; background-color: #d5f5e3;">\n');
+                            fold_str = '均值';
+                        elseif fold == -1
+                            fprintf(fid, '            <tr style="font-weight: bold; background-color: #fdebd0;">\n');
+                            fold_str = '标准差';
+                        else
+                            fprintf(fid, '            <tr>\n');
+                            fold_str = num2str(fold);
+                        end
+                        
+                        fprintf(fid, '                <td>%s</td>\n', fold_str);
+                        fprintf(fid, '                <td>%.3f</td>\n', cv_table.Accuracy(i));
+                        fprintf(fid, '                <td>%.3f</td>\n', cv_table.Precision(i));
+                        fprintf(fid, '                <td>%.3f</td>\n', cv_table.Recall(i));
+                        fprintf(fid, '                <td>%.3f</td>\n', cv_table.Specificity(i));
+                        fprintf(fid, '                <td>%.3f</td>\n', cv_table.F1_Score(i));
+                        fprintf(fid, '                <td>%.3f</td>\n', cv_table.AUC(i));
+                        fprintf(fid, '            </tr>\n');
+                    end
+                    
+                    fprintf(fid, '        </table>\n');
+                    fprintf(fid, '    </div>\n');
+                    
+                    % 添加系数变异系数分析
+                    if isfield(cv_results, 'coef_cv') && isfield(cv_results, 'variables')
+                        fprintf(fid, '    <h3>模型系数稳定性</h3>\n');
+                        
+                        fprintf(fid, '    <div style="overflow-x: auto;">\n');
+                        fprintf(fid, '        <table>\n');
+                        fprintf(fid, '            <tr>\n');
+                        fprintf(fid, '                <th>变量</th>\n');
+                        fprintf(fid, '                <th>变异系数(CV)</th>\n');
+                        fprintf(fid, '                <th>稳定性</th>\n');
+                        fprintf(fid, '                <th>可视化</th>\n');
+                        fprintf(fid, '            </tr>\n');
+                        
+                        % 排序变异系数
+                        [sorted_cv, idx] = sort(cv_results.coef_cv, 'descend');
+                        var_list = ['Intercept'; cv_results.variables(2:end)]; % 排除截距
+                        sorted_vars = var_list(idx);
+                        
+                        for j = 1:length(sorted_cv)
+                            var_name = sorted_vars{j};
+                            cv_val = sorted_cv(j);
+                            
+                            % 确定稳定性等级
+                            if cv_val < 0.3
+                                stability = '<span class="positive">高稳定性</span>';
+                                color = '#27ae60';
+                            elseif cv_val < 0.5
+                                stability = '<span class="warning">中等稳定性</span>';
+                                color = '#f39c12';
+                            else
+                                stability = '<span class="negative">低稳定性</span>';
+                                color = '#e74c3c';
+                            end
+                            
+                            fprintf(fid, '            <tr>\n');
+                            fprintf(fid, '                <td>%s</td>\n', var_name);
+                            fprintf(fid, '                <td>%.3f</td>\n', cv_val);
+                            fprintf(fid, '                <td>%s</td>\n', stability);
+                            fprintf(fid, '                <td><div style="background-color: %s; width: %d%%; height: 20px;"></div></td>\n', 
+                                color, round(min(cv_val * 100, 100)));
+                            fprintf(fid, '            </tr>\n');
+                        end
+                        
+                        fprintf(fid, '        </table>\n');
+                        fprintf(fid, '    </div>\n');
+                    end
+                else
+                    fprintf(fid, '    <p>没有可用的交叉验证结果。</p>\n');
+                end
+                
+                % 6. 结论与建议
+                fprintf(fid, '    <h2>6. 结论与建议</h2>\n');
+                
+                fprintf(fid, '    <div class="conclusion">\n');
+                fprintf(fid, '        <h3>综合分析结论</h3>\n');
+                
+                % 找出最佳方法和表现
+                [~, best_idx] = max([results.(methods{1}).performance.avg_f1_score, results.(methods{2}).performance.avg_f1_score]);
+                best_method = methods{best_idx};
+                best_perf = results.(best_method).performance;
+                
+                fprintf(fid, '        <p><strong>最佳模型选择：</strong> 基于综合性能指标，<span class="highlight">%s</span>方法表现最佳，其F1分数为%.3f，AUC为%.3f。</p>\n',
+                    best_method, best_perf.avg_f1_score, best_perf.avg_auc);
+                
+                % 模型稳定性分析
+                fprintf(fid, '        <p><strong>模型稳定性：</strong> ');
+                
+                % 判断稳定性
+                stability_good = true;
+                if isfield(coef_stability, best_method) && isfield(coef_stability.(best_method), 'table')
+                    coef_table = coef_stability.(best_method).table;
+                    high_cv_count = sum(coef_table.CV > 0.5);
+                    
+                    if high_cv_count > 0
+                        stability_good = false;
+                        fprintf(fid, '最佳方法中有<span class="warning">%d个变量</span>的系数变异系数较高(>0.5)，表明模型在某些维度上稳定性不足。', high_cv_count);
+                    else
+                        fprintf(fid, '最佳方法的所有变量系数<span class="positive">都具有良好的稳定性</span>，表明模型具有可靠的泛化能力。');
+                    end
+                } else {
+                    fprintf(fid, '无法评估模型的系数稳定性，因为缺少相关数据。');
+                }
+                fprintf(fid, '</p>\n');
+                
+                % 关键变量分析
+                fprintf(fid, '        <p><strong>关键预测变量：</strong> ');
+                
+                if isfield(var_contribution, 'overall_importance') && height(var_contribution.overall_importance) >= 3
+                    top3_vars = var_contribution.overall_importance.Variable(1:3);
+                    top3_imp = var_contribution.overall_importance.Normalized_Importance(1:3);
+                    
+                    fprintf(fid, '三个最重要的变量是<span class="highlight">%s (%.1f%%)</span>、<span class="highlight">%s (%.1f%%)</span>和<span class="highlight">%s (%.1f%%)</span>，这些变量对预测结果具有最大影响。',
+                        top3_vars{1}, top3_imp(1), top3_vars{2}, top3_imp(2), top3_vars{3}, top3_imp(3));
+                } else {
+                    % 使用频率表
+                    top3_vars = var_freq_table.VariableName(1:3);
+                    top3_freq = var_freq_table.Average(1:3);
+                    
+                    fprintf(fid, '根据选择频率，三个最重要的变量是<span class="highlight">%s (%.1f%%)</span>、<span class="highlight">%s (%.1f%%)</span>和<span class="highlight">%s (%.1f%%)</span>。',
+                        top3_vars{1}, top3_freq(1)*100, top3_vars{2}, top3_freq(2)*100, top3_vars{3}, top3_freq(3)*100);
+                }
+                fprintf(fid, '</p>\n');
+                
+                % 对比分析
+                fprintf(fid, '        <p><strong>方法对比：</strong> ');
+                
+                % 找出性能差异最大的方法
+                perf_range = max([results.(methods{1}).performance.avg_f1_score, results.(methods{2}).performance.avg_f1_score]) - 
+                             min([results.(methods{1}).performance.avg_f1_score, results.(methods{2}).performance.avg_f1_score]);
+                
+                if perf_range > 0.1
+                    fprintf(fid, '不同变量选择方法之间的性能差异<span class="warning">较大</span>（F1分数范围为%.3f），表明变量选择策略对模型性能影响显著。', perf_range);
+                else
+                    fprintf(fid, '不同变量选择方法之间的性能差异<span class="positive">较小</span>（F1分数范围为%.3f），表明所有方法都能够捕捉到数据中的主要信号。', perf_range);
+                end
+                fprintf(fid, '</p>\n');
+                
+                % 建议
+                fprintf(fid, '        <h3>建议</h3>\n');
+                fprintf(fid, '        <ol>\n');
+                
+                % 最佳模型建议
+                fprintf(fid, '            <li><strong>模型选择：</strong> 建议采用<span class="highlight">%s</span>方法构建最终模型，因为它在F1分数和AUC等综合指标上表现最佳。</li>\n',
+                    best_method);
+                
+                % 变量建议
+                fprintf(fid, '            <li><strong>变量选择：</strong> ');
+                
+                if isfield(results.(best_method), 'group_performance') && ~isempty(results.(best_method).group_performance)
+                    best_combo = results.(best_method).group_performance(1).variables;
+                    best_combo_str = strjoin(best_combo, '、');
+                    
+                    fprintf(fid, '建议使用最常见的变量组合：<span class="highlight">%s</span>，该组合在测试数据上表现稳定。</li>\n', best_combo_str);
+                else
+                    % 使用频率最高的变量
+                    top_vars = var_freq_table.VariableName(1:min(5, height(var_freq_table)));
+                    top_vars_str = strjoin(top_vars, '、');
+                    
+                    fprintf(fid, '建议优先考虑选择频率最高的变量：<span class="highlight">%s</span>。</li>\n', top_vars_str);
+                end
+                
+                % 稳定性建议
+                fprintf(fid, '            <li><strong>模型稳定性：</strong> ');
+                
+                if stability_good
+                    fprintf(fid, '当前模型表现具有良好的稳定性，建议在实践应用中定期监控模型性能，确保模型保持有效。</li>\n');
+                else
+                    fprintf(fid, '为提高模型稳定性，建议考虑使用集成方法，或对模型进行正则化调整，以减少系数的变异性。</li>\n');
+                end
+                
+                % 进一步研究建议
+                fprintf(fid, '            <li><strong>进一步研究：</strong> 建议进一步探索变量间的交互效应，可能会带来模型性能的进一步提升。同时，考虑收集更多样本数据以增强模型的泛化能力。</li>\n');
+                
+                fprintf(fid, '        </ol>\n');
+                fprintf(fid, '    </div>\n');
+                
+                % 页脚
+                fprintf(fid, '    <div class="footer">\n');
+                fprintf(fid, '        <p>Binomial分析增强报告 | 生成时间: %s</p>\n', time_str);
+                fprintf(fid, '    </div>\n');
+                
+                % HTML尾部
+                fprintf(fid, '</body>\n');
+                fprintf(fid, '</html>\n');
+                
+                % 关闭文件
+                fclose(fid);
+                
+                logger.log_message('info', sprintf('增强报告已保存至 %s', report_file));
+            catch ME
+                % 确保文件已关闭
+                if fid >= 3
+                    fclose(fid);
+                end
+                logger.log_message('error', sprintf('创建增强报告时出错: %s', ME.message));
+            end
+        end
+        
+    end
+end
         

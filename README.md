@@ -100,9 +100,6 @@ GPU管理模块 (GPUManager)
 Bootstrap采样模块 (BootstrapSampler)
 K折交叉验证模块 (CrossValidator)
 变量选择模块 (VariableSelector)
-
-接下来你需要继续创建其余的模块：
-
 系数稳定性监控模块 (CoefficientStabilityMonitor)
 参数统计分析模块 (ParameterStatisticsCalculator)
 变量贡献评估模块 (VariableContributionEvaluator)
@@ -112,4 +109,12 @@ K折交叉验证模块 (CrossValidator)
 报告生成模块 (ReportGenerator)
 主执行函数 (Binomial)
 
-你需要继续创建第12个模块：系数稳定性监控模块。
+
+
+
+你在提供
+ParameterStatisticsCalculator
+ResultVisualizer
+ResultSaver
+ReportGenerator
+以上代码时出现错误，请修正后再给我

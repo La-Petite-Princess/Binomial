@@ -1,4 +1,4 @@
-function Binomial_35(filename)
+function Binomial(filename)
 % 二元逻辑回归模型的完整实现 - 为MacBook Pro 2019 i9-9980HK优化
 % 增强版：增加k折交叉验证、多指标监控、系数稳定性评估、参数置信区间和变量贡献分析
 % 增强版2.0：增加BCa置信区间、箱线图、PR曲线、校准曲线、混淆矩阵、AIC/BIC评价、残差分析、累计方差
@@ -6,7 +6,7 @@ function Binomial_35(filename)
 % 输入:
 %   filename - 包含数据的.mat文件路径
 % 示例:
-%   Binomial_35('mydata.mat');
+%   Binomial('mydata.mat');
 
 % 开始计时
 tic;
@@ -284,24 +284,54 @@ function log_message(level, message)
     end
 end
 
-%日志级别控制函数
-function set_log_level(level)
-% 设置全局日志级别
-% 输入:
-%   level - 日志级别 ('debug', 'info', 'warning', 'error')
+% 在日志级别控制函数中添加图形保存专用级别
+function set_log_level(level, options)
+    % 设置全局日志级别
+    % 输入:
+    %   level - 日志级别 ('debug', 'info', 'warning', 'error')
+    %   options - 可选配置参数
 
-    persistent current_level;
+    persistent current_level figure_save_level;
     
-    % 定义有效的级别
+    % 默认图形保存日志级别比一般日志级别高一级（减少输出）
+    if nargin >= 2 && isfield(options, 'figure_save_level')
+        figure_save_level = options.figure_save_level;
+    elseif isempty(figure_save_level)
+        % 图形保存默认使用更高级别
+        switch lower(level)
+            case 'debug'
+                figure_save_level = 'info';
+            case 'info'
+                figure_save_level = 'warning';
+            otherwise
+                figure_save_level = level;
+        end
+    end
+    
+    % 默认级别逻辑
     valid_levels = {'debug', 'info', 'warning', 'error'};
     
     % 检查级别是否有效
     if ismember(lower(level), valid_levels)
         current_level = lower(level);
-        fprintf('日志级别已设置为: %s\n', upper(current_level));
+        fprintf('日志级别已设置为: %s (图形保存级别: %s)\n', upper(current_level), upper(figure_save_level));
     else
         fprintf('无效的日志级别: %s, 有效级别: debug, info, warning, error\n', level);
     end
+end
+
+% 增加获取图形保存级别的函数
+function level = get_figure_save_level()
+    % 获取图形保存日志级别
+    % 输出:
+    %   level - 当前图形保存日志级别
+
+    persistent figure_save_level;
+    if isempty(figure_save_level)
+        figure_save_level = 'info'; % 默认级别
+    end
+    
+    level = figure_save_level;
 end
 
 %获取当前日志级别
@@ -4898,51 +4928,52 @@ function create_variable_group_plot(results, methods, var_names, figure_dir)
     end
 end
 
-%% 通用图片保存函数 - 改进版
-function save_figure(fig, figure_dir, base_name, formats, dpi, method_name)
-% 增强版的图形保存函数 - 支持方法名称替换
+%% 图形保存函数
+function save_figure(fig, output_dir, filename_base, varargin)
+% 统一的图形保存函数，支持多种格式和高级选项
 % 输入:
 %   fig - 图形句柄
-%   figure_dir - 保存目录
-%   base_name - 基本文件名(不含扩展名)
-%   formats - 要保存的格式列表
-%   dpi - 分辨率
-%   method_name - 可选的方法名称，用于替换文件名中的%s
+%   output_dir - 输出目录
+%   filename_base - 基本文件名（可包含%s，将被method_name替换）
+% 可选命名参数:
+%   'Formats' - 要保存的格式列表，默认为 {'png', 'pdf'}
+%   'DPI' - 分辨率，默认为300
+%   'MethodName' - 方法名称，用于替换文件名中的%s
+%   'BestFit' - 是否使用最佳适配选项，默认为true
 
-    % 参数检查
-    if nargin < 4
-        formats = {'png'}; 
+    % 解析输入参数
+    p = inputParser;
+    addParameter(p, 'Formats', {'png', 'pdf'}, @(x) iscell(x) || ischar(x));
+    addParameter(p, 'DPI', 300, @isnumeric);
+    addParameter(p, 'MethodName', '', @ischar);
+    addParameter(p, 'BestFit', true, @islogical);
+    parse(p, varargin{:});
+    
+    formats = p.Results.Formats;
+    dpi = p.Results.DPI;
+    method_name = p.Results.MethodName;
+    use_bestfit = p.Results.BestFit;
+    
+    % 如果formats是字符串，转换为cell数组
+    if ischar(formats)
+        formats = {formats};
     end
     
-    if nargin < 5
-        dpi = 300; 
+    % 确保输出目录存在
+    if ~exist(output_dir, 'dir')
+        mkdir(output_dir);
     end
     
-    if nargin < 6
-        method_name = '';
-    end
-    
-    % 确保目录存在
-    if ~exist(figure_dir, 'dir')
-        mkdir(figure_dir);
-    end
-    
-    % 改进: 检查文件名中是否包含%s，如果包含但没有提供method_name，给出警告并提供默认替换
-    if contains(base_name, '%s')
-        if isempty(method_name)
-            % 记录警告
-            if exist('log_message', 'file') == 2
-                log_message('warning', ['文件名中包含%s但未提供method_name，使用默认值"unknown"替换']);
-            else
-                warning('文件名中包含%%s但未提供method_name，使用默认值"unknown"替换');
-            end
-            
-            % 使用默认值替换%s
-            base_name = strrep(base_name, '%s', 'unknown');
+    % 处理文件名中的方法名称替换
+    if contains(filename_base, '%s')
+        if ~isempty(method_name)
+            actual_filename = strrep(filename_base, '%s', method_name);
         else
-            % 正常替换
-            base_name = strrep(base_name, '%s', method_name);
+            actual_filename = strrep(filename_base, '%s', 'unknown');
+            log_message('warning', '文件名中包含%s但未提供method_name');
         end
+    else
+        actual_filename = filename_base;
     end
     
     % 准备图形
@@ -4955,32 +4986,18 @@ function save_figure(fig, figure_dir, base_name, formats, dpi, method_name)
         leg = findobj(ax(i), 'Type', 'Legend');
         if ~isempty(leg)
             % 确保图例处于最佳位置
-            leg.Location = leg.Location; 
-            leg.FontSize = leg.FontSize;
-            
-            % 尝试将图例放在更合适的位置
-            if strcmp(leg.Location, 'best')
-                % 如果是自动位置，可以根据数据分布计算更好的位置
-                axes_pos = get(ax(i), 'Position');
-                if axes_pos(1) < 0.4 % 如果图形在左侧
-                    leg.Location = 'northeast';
-                else
-                    leg.Location = 'northwest';
-                end
-            end
+            leg.FontSize = max(leg.FontSize, 9);
         end
         
         % 确保轴标签清晰可见
         ax(i).FontSize = max(ax(i).FontSize, 9); % 确保字体足够大
-        
-        % 调整刻度，避免重叠
-        set(ax(i), 'TickDir', 'out');
-        ax(i).XAxis.TickLength = [0.02 0.02];
-        ax(i).YAxis.TickLength = [0.02 0.02];
     end
     
-    % 设置适当的纸张属性
-    set(fig, 'PaperPositionMode', 'auto');
+    % 设置纸张属性
+    set(fig, 'PaperPositionMode', 'manual');
+    set(fig, 'PaperUnits', 'inches');
+    set(fig, 'PaperSize', [10 8]); % 设置为 10x8 英寸
+    set(fig, 'PaperPosition', [0 0 10 8]);
     
     % 初始化成功保存的格式列表
     successful_formats = {};
@@ -4988,174 +5005,50 @@ function save_figure(fig, figure_dir, base_name, formats, dpi, method_name)
     % 保存每种格式
     for i = 1:length(formats)
         format = lower(formats{i});
-        filename = fullfile(figure_dir, [base_name '.' format]);
+        filename = fullfile(output_dir, [actual_filename '.' format]);
         
         try
-            % SVG格式特殊处理 - 直接使用print而不尝试exportgraphics
-            if strcmp(format, 'svg')
-                print(fig, filename, '-dsvg');
-                successful_formats{end+1} = upper(format);
-                continue;
+            % 根据不同的格式选择不同的保存方法
+            switch format
+                case {'png', 'jpg', 'jpeg', 'tiff', 'bmp'}
+                    % 位图格式
+                    print(fig, filename, ['-d' format], ['-r' num2str(dpi)]);
+                    
+                case 'pdf'
+                    % PDF格式
+                    if use_bestfit
+                        print(fig, filename, '-dpdf', '-bestfit');
+                    else
+                        print(fig, filename, '-dpdf');
+                    end
+                    
+                case 'eps'
+                    % EPS格式
+                    print(fig, filename, '-depsc2');
+                    
+                case 'svg'
+                    % SVG格式
+                    print(fig, filename, '-dsvg');
+                    
+                otherwise
+                    % 其他格式
+                    saveas(fig, filename);
             end
             
-            % 其他格式尝试使用exportgraphics
-            options = {};
-            
-            % 对于矢量格式
-            if ismember(format, {'pdf', 'eps'})
-                options = [options, {'ContentType', 'vector'}];
-            else
-                % 对于位图格式设置分辨率
-                options = [options, {'Resolution', dpi}];
-                
-                % 对于PNG，添加透明背景
-                if strcmp(format, 'png')
-                    options = [options, {'BackgroundColor', 'none'}];
-                end
-            end
-            
-            % 使用exportgraphics保存
-            exportgraphics(fig, filename, options{:});
             successful_formats{end+1} = upper(format);
             
         catch ME
-            % 详细记录错误信息
-            if exist('log_message', 'file') == 2
-                log_message('debug', ['保存' upper(format) '格式时出错: ' ME.message]);
-            else
-                warning(['保存' upper(format) '格式时出错: ' ME.message]);
-            end
+            % 保存失败，记录错误并尝试备用方法
+            log_message('debug', ['保存' upper(format) '格式时出错: ' ME.message]);
             
             % 尝试备用方法
             try
-                switch format
-                    case {'png', 'jpg', 'tiff'}
-                        print(fig, filename, ['-d' format], ['-r' num2str(dpi)]);
-                    case {'pdf', 'eps', 'svg'}
-                        print(fig, filename, ['-d' format]);
-                    otherwise
-                        saveas(fig, filename);
-                end
-                
+                % 备用保存方法
+                saveas(fig, filename);
                 successful_formats{end+1} = upper(format);
             catch ME2
-                if exist('log_message', 'file') == 2
-                    log_message('error', ['所有' upper(format) '保存方法均失败: ' ME2.message]);
-                else
-                    warning(['所有' upper(format) '保存方法均失败: ' ME2.message]);
-                end
+                log_message('warning', ['备用保存方法也失败: ' ME2.message]);
             end
-        end
-    end
-    
-    % 输出汇总日志消息
-    if ~isempty(successful_formats)
-        % 获取没有路径的文件名基础部分
-        [~, file_basename, ~] = fileparts(base_name);
-        
-        % 格式化成功保存的格式列表
-        formats_str = strjoin(successful_formats, ', ');
-        
-        % 输出汇总日志
-        if exist('log_message', 'file') == 2
-            log_message('info', sprintf('成功保存图形: %s (%s)', file_basename, formats_str));
-        else
-            disp(sprintf('成功保存图形: %s (%s)', file_basename, formats_str));
-        end
-    else
-        % 如果没有任何格式保存成功
-        if exist('log_message', 'file') == 2
-            log_message('error', ['图形保存失败: ' base_name]);
-        else
-            warning(['图形保存失败: ' base_name]);
-        end
-    end
-end
-
-%% 矢量图保存函数
-function save_vector_graphic(fig, output_dir, filename_base, method_name)
-% 专注于矢量图格式的图形保存函数
-% 输入:
-%   fig - 图形句柄
-%   output_dir - 输出目录
-%   filename_base - 基本文件名（可包含%s，将被method_name替换）
-%   method_name - 方法名称，用于替换文件名中的%s
-
-    % 确保输出目录存在
-    if ~exist(output_dir, 'dir')
-        mkdir(output_dir);
-    end
-    
-    % 处理文件名中的方法名称替换
-    if nargin < 4
-        method_name = '';
-    end
-    
-    if contains(filename_base, '%s')
-        if ~isempty(method_name)
-            actual_filename = strrep(filename_base, '%s', method_name);
-        else
-            actual_filename = strrep(filename_base, '%s', 'unknown');
-            log_message('warning', '文件名中包含%s但未提供method_name');
-        end
-    else
-        actual_filename = filename_base;
-    end
-    
-    % 初始化成功保存的格式列表
-    successful_formats = {};
-    
-    % 保存PNG格式
-    format = 'png';
-    png_path = fullfile(output_dir, [actual_filename, '.', format]);
-    try
-        print(fig, png_path, '-dpng', '-r300');
-        successful_formats{end+1} = upper(format);
-    catch ME
-        log_message('debug', ['保存PNG失败: ', ME.message]);
-    end
-    
-    % 保存PDF矢量格式
-    format = 'pdf';
-    pdf_path = fullfile(output_dir, [actual_filename, '.', format]);
-    try
-        print(fig, pdf_path, '-dpdf', '-bestfit');
-        successful_formats{end+1} = upper(format);
-    catch ME
-        log_message('debug', ['保存PDF失败: ', ME.message]);
-    end
-    
-    % 尝试保存EPS矢量格式
-    format = 'eps';
-    eps_path = fullfile(output_dir, [actual_filename, '.', format]);
-    try
-        print(fig, eps_path, '-depsc2');
-        successful_formats{end+1} = upper(format);
-    catch ME
-        log_message('debug', ['保存EPS失败: ', ME.message]);
-    end
-    
-    % 尝试保存SVG矢量格式
-    format = 'svg';
-    svg_path = fullfile(output_dir, [actual_filename, '.', format]);
-    try
-        % 对于SVG格式，选项更加特定
-        print(fig, svg_path, '-dsvg');
-        successful_formats{end+1} = upper(format);
-    catch ME
-        log_message('debug', ['保存SVG失败: ', ME.message]);
-        % SVG失败时尝试备用方案
-        try
-            % 直接使用saveas函数
-            saveas(fig, svg_path, 'svg');
-            
-            % 检查是否已经添加过SVG格式
-            if ~ismember('SVG', successful_formats)
-                successful_formats{end+1} = 'SVG';
-            end
-            
-        catch ME2
-            log_message('error', ['所有SVG保存方法均失败: ', ME2.message]);
         end
     end
     
@@ -5167,12 +5060,30 @@ function save_vector_graphic(fig, output_dir, filename_base, method_name)
         % 格式化成功保存的格式列表
         formats_str = strjoin(successful_formats, ', ');
         
-        % 输出汇总日志
-        log_message('info', sprintf('成功保存图形: %s (%s)', file_basename, formats_str));
+        % 如果是调试级别，只记录一条简短的日志
+        log_level = get_log_level();
+        if strcmpi(log_level, 'debug')
+            log_message('debug', sprintf('保存图形: %s (%s)', file_basename, formats_str));
+        else
+            % 对于其他级别，只记录一条简短的信息日志
+            log_message('info', sprintf('图形已保存: %s (%s)', file_basename, formats_str));
+        end
     else
         % 如果没有任何格式保存成功
         log_message('error', ['图形保存失败: ' actual_filename]);
     end
+end
+
+% 辅助函数
+function save_vector_graphic(fig, output_dir, filename_base)
+% 保存矢量图（向后兼容）
+% 输入:
+%   fig - 图形句柄
+%   output_dir - 输出目录
+%   filename_base - 基本文件名
+
+    % 调用统一的保存函数，指定矢量格式
+    save_figure(fig, output_dir, filename_base, 'Formats', {'pdf', 'svg'}, 'LogLevel', 'debug');
 end
 
 %% 创建增强综合报告 - 新增

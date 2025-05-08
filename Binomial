@@ -4856,7 +4856,7 @@ function create_variable_group_plot(results, methods, var_names, figure_dir)
             h.FontSize = 10;
             
             % 保存矢量图 - 注意这里传入方法名
-            save_figure(fig2, figure_dir, '%s_combination_details', method, 'Formats', {'svg'});
+            save_figure(fig2, figure_dir, '%s_combination_details', 'MethodName', method, 'Formats', {'svg'});
             close(fig2);
         else
             log_message('info', sprintf('%s方法的变量组合少于3个，跳过可视化', method));

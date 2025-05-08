@@ -708,7 +708,7 @@ caxis([-1, 1]);
 colorbar;
 
 % 保存矢量图
-save_vector_graphic(fig, 'results', 'variable_correlation');
+save_figure(fig, 'results', 'variable_correlation', 'Formats', {'png', 'svg'});
 close(fig);
 
 % 识别高度相关的变量对
@@ -1257,11 +1257,7 @@ sgtitle(sprintf('K折交叉验证分析 (K=%d)', k), 'FontSize', 16, 'FontWeight
 set(gcf, 'Color', 'white');
 
 % 保存为图像
-try
-    save_vector_graphic(fig, 'results', 'kfold_visualization');
-catch
-    saveas(fig, fullfile('results', 'kfold_visualization.png'));
-end
+save_figure(fig, 'results', 'kfold_visualization', 'Formats', {'png', 'svg'});
 close(fig);
 end
 
@@ -1805,7 +1801,7 @@ for i = 1:length(methods)
                 sgtitle(sprintf('%s方法的残差分析', method), 'FontSize', 14, 'FontWeight', 'bold');
                 
                 % 保存图形
-                save_vector_graphic(fig, figure_dir, sprintf('%s_residual_analysis', method));
+                save_figure(fig, figure_dir, '%s_residual_analysis', 'MethodName', method, 'Formats', {'png', 'svg'});
                 close(fig);
                 
                 % 创建残差汇总统计表
@@ -3353,7 +3349,7 @@ sgtitle(sprintf('K折交叉验证各折性能指标 (K=%d)', k), 'FontSize', 16,
 set(gcf, 'Color', 'white');
 
 % 保存图形
-save_vector_graphic(fig, figure_dir, 'kfold_performance_by_fold');
+save_figure(fig, figure_dir, 'kfold_performance_by_fold', 'Formats', {'png', 'svg'});
 close(fig);
 end
 
@@ -3586,7 +3582,7 @@ sgtitle('K折交叉验证性能分析', 'FontSize', 16, 'FontWeight', 'bold');
 set(gcf, 'Color', 'white');
 
 % 保存矢量图
-save_vector_graphic(fig, figure_dir, 'cv_performance');
+save_figure(fig, figure_dir, 'cv_performance', 'Formats', {'png', 'svg'});
 
 % 关闭图形
 close(fig);
@@ -3664,7 +3660,7 @@ for m = 1:length(methods)
         set(gcf, 'Color', 'white');
                 
         % 保存矢量图
-        save_vector_graphic(fig, figure_dir, [method, '_coefficient_stability']);
+        save_figure(fig, figure_dir, '%s_coefficient_stability', 'MethodName', method);
         
         % 关闭图形
         close(fig);
@@ -3719,7 +3715,7 @@ try
         set(gcf, 'Color', 'white');
                 
         % 保存矢量图
-        save_vector_graphic(fig, figure_dir, 'coefficient_stability_comparison');
+        save_figure(fig, figure_dir, 'coefficient_stability_comparison', 'Formats', {'png', 'svg'});
         
         % 关闭图形
         close(fig);
@@ -3769,7 +3765,7 @@ function create_variable_contribution_plot(var_contribution, figure_dir)
             end
             
             % 保存图形，指定多种格式
-            save_figure(fig, figure_dir, 'overall_variable_importance', 'Formats', {'png', 'pdf', 'svg'});
+            save_figure(fig, figure_dir, 'overall_variable_importance', 'Formats', {'png', 'svg'});
             close(fig);
         catch ME
             log_message('warning', sprintf('创建综合变量重要性图失败: %s', ME.message));
@@ -3819,7 +3815,7 @@ function create_variable_contribution_plot(var_contribution, figure_dir)
             line([0, 0], [0, top_n+1], 'Color', 'k', 'LineStyle', '--', 'LineWidth', 1);
             
             % 保存图形
-            save_figure(fig, figure_dir, 'correlation_analysis', 'Formats', {'png', 'pdf'});
+            save_figure(fig, figure_dir, 'correlation_analysis', 'Formats', {'png', 'svg'});
             close(fig);
         catch ME
             log_message('warning', sprintf('创建相关性分析图失败: %s', ME.message));
@@ -3908,7 +3904,7 @@ function create_variable_contribution_plot(var_contribution, figure_dir)
                     end
                     
                     % 保存图形，使用方法名
-                    save_figure(fig, figure_dir, 'variable_contribution', 'MethodName', method);
+                    save_figure(fig, figure_dir, '%s_variable_contribution', 'MethodName', method);
                     close(fig);
                 catch ME
                     log_message('warning', sprintf('创建%s方法的变量贡献图失败: %s', method, ME.message));
@@ -4030,7 +4026,7 @@ function create_boxplot_visualization(results, methods, figure_dir)
         ylim([ylim_current(1), ylim_current(2) + 0.1]);
         
         % 保存图形
-        save_figure(fig, figure_dir, sprintf('boxplot_%s', lower(metric)), 'Formats', {'png', 'pdf'});
+        save_figure(fig, figure_dir, sprintf('boxplot_%s', lower(metric)), 'Formats', {'png', 'svg'});
         close(fig);
     end
 end
@@ -4168,7 +4164,7 @@ function create_pr_curves(results, methods, figure_dir)
     box on;
 
     % 保存图形
-    save_figure(fig, figure_dir, 'precision_recall_curves', 'Formats', {'png', 'pdf'});
+    save_figure(fig, figure_dir, 'precision_recall_curves', 'Formats', {'png', 'svg'});
     close(fig);
 end
 
@@ -4314,7 +4310,7 @@ set(gca, 'FontSize', 11);
 box on;
 
 % 保存图形
-save_figure(fig, figure_dir, 'calibration_curves', 'Formats', {'png', 'pdf', 'svg'});
+save_figure(fig, figure_dir, 'calibration_curves', 'Formats', {'png', 'svg'});
 close(fig);
 end
 
@@ -4564,7 +4560,7 @@ function create_confusion_matrices(results, methods, figure_dir)
         sgtitle('各方法混淆矩阵比较 (归一化)', 'FontSize', 14, 'FontWeight', 'bold');
         
         % 保存图形
-        save_vector_graphic(fig, figure_dir, 'confusion_matrix_comparison');
+        save_figure(fig, figure_dir, 'confusion_matrix_comparison', 'Formats', {'png', 'svg'});
         close(fig);
     catch ME
         log_message('warning', sprintf('创建混淆矩阵比较图失败: %s', ME.message));
@@ -4624,7 +4620,7 @@ function create_roc_curves(results, methods, figure_dir)
     text(0.05, 0.95, '注: 点表示在测试集上的平均性能', 'FontSize', 9);
 
     % 使用统一保存函数，指定保存格式和BestFit选项
-    save_figure(fig, figure_dir, 'roc_curves', 'Formats', {'png', 'pdf', 'svg'}, 'BestFit', true);
+    save_figure(fig, figure_dir, 'roc_curves', 'Formats', {'png', 'svg'});
     close(fig);
 end
 
@@ -4683,7 +4679,7 @@ function create_variable_importance_plot(results, methods, var_names, figure_dir
     set(gcf, 'Position', [100, 100, 900, fig_height]);
 
     % 使用统一保存函数
-    save_figure(fig, figure_dir, 'variable_importance', 'Formats', {'png', 'pdf'});
+    save_figure(fig, figure_dir, 'variable_importance', 'Formats', {'png', 'svg'});
     close(fig);
 end
 
@@ -4807,7 +4803,7 @@ function create_variable_group_plot(results, methods, var_names, figure_dir)
             h.FontSize = 10;
             
             % 保存图形
-            save_figure(fig2, figure_dir, 'combination_details', 'MethodName', method);
+            save_figure(fig1, figure_dir, '%s_variable_combinations', 'MethodName', method);
             close(fig2);
         else
             log_message('info', sprintf('%s方法的变量组合少于2个，跳过可视化', method));
@@ -4864,7 +4860,7 @@ function create_variable_group_plot(results, methods, var_names, figure_dir)
                 'HorizontalAlignment', 'center', 'FontSize', 10);
             
             % 保存图形
-            save_figure(fig3, figure_dir, 'top_combinations_comparison', 'Formats', {'png', 'pdf'});
+            save_figure(fig3, figure_dir, 'top_combinations_comparison', 'Formats', {'png', 'svg'});
             close(fig3);
         end
     catch ME
@@ -4874,20 +4870,20 @@ end
 
 %% 统一图形保存函数
 function save_figure(fig, output_dir, filename_base, varargin)
-% 统一的图形保存函数，支持多种格式和高级选项
-% 输入:
-%   fig - 图形句柄
-%   output_dir - 输出目录
-%   filename_base - 基本文件名（可包含%s，将被method_name替换）
-% 可选命名参数:
-%   'Formats' - 要保存的格式列表，默认为 {'png', 'pdf'}
-%   'DPI' - 分辨率，默认为300
-%   'MethodName' - 方法名称，用于替换文件名中的%s
-%   'BestFit' - 是否使用最佳适配选项，默认为true
+    % 统一的图形保存函数，支持多种格式和高级选项
+    % 输入:
+    %   fig - 图形句柄
+    %   output_dir - 输出目录
+    %   filename_base - 基本文件名（可包含%s，将被method_name替换）
+    % 可选命名参数:
+    %   'Formats' - 要保存的格式列表，默认为 {'png', 'svg'}
+    %   'DPI' - 分辨率，默认为300
+    %   'MethodName' - 方法名称，用于替换文件名中的%s
+    %   'BestFit' - 是否使用最佳适配选项，默认为true
 
     % 解析输入参数
     p = inputParser;
-    addParameter(p, 'Formats', {'png', 'pdf'}, @(x) iscell(x) || ischar(x));
+    addParameter(p, 'Formats', {'png', 'svg'}, @(x) iscell(x) || ischar(x));
     addParameter(p, 'DPI', 300, @isnumeric);
     addParameter(p, 'MethodName', '', @ischar);
     addParameter(p, 'BestFit', true, @islogical);

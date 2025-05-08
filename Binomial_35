@@ -1,4 +1,4 @@
-function Binomial_35(filename)
+function Binomial_39(filename)
 % 二元逻辑回归模型的完整实现 - 为MacBook Pro 2019 i9-9980HK优化
 % 增强版：增加k折交叉验证、多指标监控、系数稳定性评估、参数置信区间和变量贡献分析
 % 增强版2.0：增加BCa置信区间、箱线图、PR曲线、校准曲线、混淆矩阵、AIC/BIC评价、残差分析、累计方差
@@ -6,7 +6,7 @@ function Binomial_35(filename)
 % 输入:
 %   filename - 包含数据的.mat文件路径
 % 示例:
-%   Binomial_35('mydata.mat');
+%   Binomial_39('mydata.mat');
 
 % 开始计时
 tic;
@@ -3729,210 +3729,193 @@ catch ME
 end
 end
 
-%% 创建变量贡献图 - 新增
+%% 变量贡献图函数
 function create_variable_contribution_plot(var_contribution, figure_dir)
-% 创建变量贡献图
-% 输入:
-%   var_contribution - 变量贡献分析结果
-%   figure_dir - 图形保存目录
+    % 创建变量贡献图，优化图形保存
+    % 输入:
+    %   var_contribution - 变量贡献分析结果
+    %   figure_dir - 图形保存目录
 
-
-
-% 创建综合变量重要性图
-if isfield(var_contribution, 'overall_importance')
-    try
-        % 提取数据
-        importance_table = var_contribution.overall_importance;
-        vars = importance_table.Variable;
-        importance = importance_table.Normalized_Importance;
-        
-        % 取前10个变量
-        top_n = min(10, length(vars));
-        top_vars = vars(1:top_n);
-        top_importance = importance(1:top_n);
-        
-        % 创建图形
-        fig = figure('Name', 'Overall Variable Importance', 'Position', [100, 100, 1000, 600]);
-        
-        % 创建条形图
-        barh_h = barh(top_importance);
-        set(barh_h, 'FaceColor', [0.3, 0.6, 0.8]);
-        
-        % 设置图形属性
-        set(gca, 'YTick', 1:top_n, 'YTickLabel', top_vars);
-        xlabel('归一化重要性 (%)', 'FontSize', 12);
-        title('综合变量重要性排名 (前10个变量)', 'FontSize', 14, 'FontWeight', 'bold');
-        grid on;
-        
-        % 添加数值标签
-        for i = 1:top_n
-            text(top_importance(i) + 0.5, i, sprintf('%.2f%%', top_importance(i)), ...
-                'VerticalAlignment', 'middle', 'FontSize', 9);
+    % 创建综合变量重要性图
+    if isfield(var_contribution, 'overall_importance')
+        try
+            % 提取数据
+            importance_table = var_contribution.overall_importance;
+            vars = importance_table.Variable;
+            importance = importance_table.Normalized_Importance;
+            
+            % 取前10个变量
+            top_n = min(10, length(vars));
+            top_vars = vars(1:top_n);
+            top_importance = importance(1:top_n);
+            
+            % 创建图形
+            fig = figure('Name', 'Overall Variable Importance', 'Position', [100, 100, 1000, 600]);
+            
+            % 创建条形图
+            barh_h = barh(top_importance);
+            set(barh_h, 'FaceColor', [0.3, 0.6, 0.8]);
+            
+            % 设置图形属性
+            set(gca, 'YTick', 1:top_n, 'YTickLabel', top_vars);
+            xlabel('归一化重要性 (%)', 'FontSize', 12);
+            title('综合变量重要性排名 (前10个变量)', 'FontSize', 14, 'FontWeight', 'bold');
+            grid on;
+            
+            % 添加数值标签
+            for i = 1:top_n
+                text(top_importance(i) + 0.5, i, sprintf('%.2f%%', top_importance(i)), ...
+                    'VerticalAlignment', 'middle', 'FontSize', 9);
+            end
+            
+            % 保存图形，指定多种格式
+            save_figure(fig, figure_dir, 'overall_variable_importance', 'Formats', {'png', 'pdf', 'svg'});
+            close(fig);
+        catch ME
+            log_message('warning', sprintf('创建综合变量重要性图失败: %s', ME.message));
         end
-        
-        % 调整图形
-        set(gcf, 'Color', 'white');
-        
-        % 保存矢量图
-        save_vector_graphic(fig, figure_dir, 'overall_variable_importance');
-        
-        % 关闭图形
-        close(fig);
-    catch ME
-        log_message('warning', sprintf('创建综合变量重要性图失败: %s', ME.message));
     end
-end
 
-% 创建相关性分析图
-if isfield(var_contribution, 'correlation')
-    try
-        % 提取数据
-        corr_table = var_contribution.correlation;
-        vars = corr_table.Variable;
-        corr_values = corr_table.Correlation;
-        partial_corr = corr_table.PartialCorr;
-        
-        % 按偏相关系数绝对值排序
-        [~, idx] = sort(abs(partial_corr), 'descend');
-        sorted_vars = vars(idx);
-        sorted_corr = corr_values(idx);
-        sorted_partial = partial_corr(idx);
-        
-        % 取前10个变量
-        top_n = min(10, length(sorted_vars));
-        top_vars = sorted_vars(1:top_n);
-        top_corr = sorted_corr(1:top_n);
-        top_partial = sorted_partial(1:top_n);
-        
-        % 创建图形
-        fig = figure('Name', 'Correlation Analysis', 'Position', [100, 100, 1000, 600]);
-        
-        % 创建分组条形图
-        bar_data = [top_corr, top_partial];
-        bar_h = barh(bar_data);
-        set(bar_h(1), 'FaceColor', [0.3, 0.6, 0.8]);
-        set(bar_h(2), 'FaceColor', [0.8, 0.3, 0.3]);
-        
-        % 设置图形属性
-        set(gca, 'YTick', 1:top_n, 'YTickLabel', top_vars);
-        xlabel('相关系数', 'FontSize', 12);
-        title('变量相关性分析 (前10个变量)', 'FontSize', 14, 'FontWeight', 'bold');
-        grid on;
-        
-        % 添加图例
-        legend({'普通相关', '偏相关'}, 'Location', 'southeast');
-        
-        % 添加参考线
-        line([0, 0], [0, top_n+1], 'Color', 'k', 'LineStyle', '--', 'LineWidth', 1);
-        
-        % 调整图形
-        set(gcf, 'Color', 'white');
-                
-        % 保存矢量图
-        save_vector_graphic(fig, figure_dir, 'correlation_analysis');
-
-        % 关闭图形
-        close(fig);
-    catch ME
-        log_message('warning', sprintf('创建相关性分析图失败: %s', ME.message));
+    % 创建相关性分析图
+    if isfield(var_contribution, 'correlation')
+        try
+            % 提取数据
+            corr_table = var_contribution.correlation;
+            vars = corr_table.Variable;
+            corr_values = corr_table.Correlation;
+            partial_corr = corr_table.PartialCorr;
+            
+            % 按偏相关系数绝对值排序
+            [~, idx] = sort(abs(partial_corr), 'descend');
+            sorted_vars = vars(idx);
+            sorted_corr = corr_values(idx);
+            sorted_partial = partial_corr(idx);
+            
+            % 取前10个变量
+            top_n = min(10, length(sorted_vars));
+            top_vars = sorted_vars(1:top_n);
+            top_corr = sorted_corr(1:top_n);
+            top_partial = sorted_partial(1:top_n);
+            
+            % 创建图形
+            fig = figure('Name', 'Correlation Analysis', 'Position', [100, 100, 1000, 600]);
+            
+            % 创建分组条形图
+            bar_data = [top_corr, top_partial];
+            bar_h = barh(bar_data);
+            set(bar_h(1), 'FaceColor', [0.3, 0.6, 0.8]);
+            set(bar_h(2), 'FaceColor', [0.8, 0.3, 0.3]);
+            
+            % 设置图形属性
+            set(gca, 'YTick', 1:top_n, 'YTickLabel', top_vars);
+            xlabel('相关系数', 'FontSize', 12);
+            title('变量相关性分析 (前10个变量)', 'FontSize', 14, 'FontWeight', 'bold');
+            grid on;
+            
+            % 添加图例
+            legend({'普通相关', '偏相关'}, 'Location', 'southeast');
+            
+            % 添加参考线
+            line([0, 0], [0, top_n+1], 'Color', 'k', 'LineStyle', '--', 'LineWidth', 1);
+            
+            % 保存图形
+            save_figure(fig, figure_dir, 'correlation_analysis', 'Formats', {'png', 'pdf'});
+            close(fig);
+        catch ME
+            log_message('warning', sprintf('创建相关性分析图失败: %s', ME.message));
+        end
     end
-end
 
-% 为各个方法创建变量贡献图
-if isfield(var_contribution, 'methods')
-    method_names = fieldnames(var_contribution.methods);
-    
-    for m = 1:length(method_names)
-        method = method_names{m};
+    % 为各个方法创建变量贡献图
+    if isfield(var_contribution, 'methods')
+        method_names = fieldnames(var_contribution.methods);
         
-        % 检查该方法是否有贡献表
-        if isfield(var_contribution.methods.(method), 'contribution_table')
-            try
-                % 提取数据
-                contrib_table = var_contribution.methods.(method).contribution_table;
-                
-                % 创建图形
-                fig = figure('Name', sprintf('%s Variable Contribution', method), 'Position', [100, 100, 1000, 600]);
-                
-                % 提取变量和贡献
-                vars = contrib_table.Variable;
-                rel_contrib = contrib_table.Relative_Contribution;
-                
-                % 取前10个变量
-                top_n = min(10, height(contrib_table));
-                top_vars = vars(1:top_n);
-                top_contrib = rel_contrib(1:top_n);
-                
-                % 为不同方法设置不同的表现形式
-                if any(strcmpi(method, {'stepwise', 'lasso', 'ridge', 'elasticnet'}))
-                    % 回归类方法显示系数和相对贡献
+        for m = 1:length(method_names)
+            method = method_names{m};
+            
+            % 检查该方法是否有贡献表
+            if isfield(var_contribution.methods.(method), 'contribution_table')
+                try
+                    % 提取数据
+                    contrib_table = var_contribution.methods.(method).contribution_table;
                     
-                    % 提取系数和方向
-                    coeffs = contrib_table.Std_Coefficient(1:top_n);
-                    directions = contrib_table.Effect_Direction(1:top_n);
+                    % 创建图形
+                    fig = figure('Name', sprintf('%s Variable Contribution', method), 'Position', [100, 100, 1000, 600]);
                     
-                    % 创建颜色映射
-                    colors = zeros(top_n, 3);
-                    for i = 1:top_n
-                        if strcmp(directions{i}, '正向')
-                            colors(i,:) = [0.2, 0.6, 0.8]; % 蓝色表示正向影响
-                        else
-                            colors(i,:) = [0.8, 0.3, 0.3]; % 红色表示负向影响
+                    % 提取变量和贡献
+                    vars = contrib_table.Variable;
+                    rel_contrib = contrib_table.Relative_Contribution;
+                    
+                    % 取前10个变量
+                    top_n = min(10, height(contrib_table));
+                    top_vars = vars(1:top_n);
+                    top_contrib = rel_contrib(1:top_n);
+                    
+                    % 为不同方法设置不同的表现形式
+                    if any(strcmpi(method, {'stepwise', 'lasso', 'ridge', 'elasticnet'}))
+                        % 回归类方法显示系数和相对贡献
+                        
+                        % 提取系数和方向
+                        coeffs = contrib_table.Std_Coefficient(1:top_n);
+                        directions = contrib_table.Effect_Direction(1:top_n);
+                        
+                        % 创建颜色映射
+                        colors = zeros(top_n, 3);
+                        for i = 1:top_n
+                            if strcmp(directions{i}, '正向')
+                                colors(i,:) = [0.2, 0.6, 0.8]; % 蓝色表示正向影响
+                            else
+                                colors(i,:) = [0.8, 0.3, 0.3]; % 红色表示负向影响
+                            end
                         end
+                        
+                        % 创建水平条形图
+                        bar_h = barh(top_contrib);
+                        set(bar_h, 'FaceColor', 'flat');
+                        bar_h.CData = colors;
+                        
+                        % 设置图形属性
+                        set(gca, 'YTick', 1:top_n, 'YTickLabel', top_vars);
+                        xlabel('相对贡献 (%)', 'FontSize', 12);
+                        title(sprintf('%s方法的变量贡献分析 (前%d个变量)', method, top_n), 'FontSize', 14, 'FontWeight', 'bold');
+                        grid on;
+                        
+                        % 添加方向指示
+                        for i = 1:top_n
+                            if strcmp(directions{i}, '正向')
+                                text(top_contrib(i) + 0.5, i, '(+)', 'VerticalAlignment', 'middle', 'FontSize', 9, 'Color', [0, 0.5, 0]);
+                            else
+                                text(top_contrib(i) + 0.5, i, '(-)', 'VerticalAlignment', 'middle', 'FontSize', 9, 'Color', [0.8, 0, 0]);
+                            end
+                        end
+                        
+                    else
+                        % 非回归类方法只显示重要性
+                        bar_h = barh(top_contrib);
+                        set(bar_h, 'FaceColor', [0.3, 0.6, 0.8]);
+                        
+                        % 设置图形属性
+                        set(gca, 'YTick', 1:top_n, 'YTickLabel', top_vars);
+                        xlabel('相对贡献 (%)', 'FontSize', 12);
+                        title(sprintf('%s方法的变量重要性 (前%d个变量)', method, top_n), 'FontSize', 14, 'FontWeight', 'bold');
+                        grid on;
                     end
                     
-                    % 创建水平条形图
-                    bar_h = barh(top_contrib);
-                    set(bar_h, 'FaceColor', 'flat');
-                    bar_h.CData = colors;
-                    
-                    % 设置图形属性
-                    set(gca, 'YTick', 1:top_n, 'YTickLabel', top_vars);
-                    xlabel('相对贡献 (%)', 'FontSize', 12);
-                    title(sprintf('%s方法的变量贡献分析 (前%d个变量)', method, top_n), 'FontSize', 14, 'FontWeight', 'bold');
-                    grid on;
-                    
-                    % 添加方向指示
+                    % 添加数值标签
                     for i = 1:top_n
-                        if strcmp(directions{i}, '正向')
-                            text(top_contrib(i) + 0.5, i, '(+)', 'VerticalAlignment', 'middle', 'FontSize', 9, 'Color', [0, 0.5, 0]);
-                        else
-                            text(top_contrib(i) + 0.5, i, '(-)', 'VerticalAlignment', 'middle', 'FontSize', 9, 'Color', [0.8, 0, 0]);
-                        end
+                        text(top_contrib(i) + 0.5, i, sprintf('%.2f%%', top_contrib(i)), ...
+                            'VerticalAlignment', 'middle', 'FontSize', 9);
                     end
                     
-                else
-                    % 非回归类方法只显示重要性
-                    bar_h = barh(top_contrib);
-                    set(bar_h, 'FaceColor', [0.3, 0.6, 0.8]);
-                    
-                    % 设置图形属性
-                    set(gca, 'YTick', 1:top_n, 'YTickLabel', top_vars);
-                    xlabel('相对贡献 (%)', 'FontSize', 12);
-                    title(sprintf('%s方法的变量重要性 (前%d个变量)', method, top_n), 'FontSize', 14, 'FontWeight', 'bold');
-                    grid on;
+                    % 保存图形，使用方法名
+                    save_figure(fig, figure_dir, 'variable_contribution', 'MethodName', method);
+                    close(fig);
+                catch ME
+                    log_message('warning', sprintf('创建%s方法的变量贡献图失败: %s', method, ME.message));
                 end
-                
-                % 添加数值标签
-                for i = 1:top_n
-                    text(top_contrib(i) + 0.5, i, sprintf('%.2f%%', top_contrib(i)), ...
-                        'VerticalAlignment', 'middle', 'FontSize', 9);
-                end
-                
-                % 调整图形
-                set(gcf, 'Color', 'white');
-                                
-                % 保存矢量图
-                save_vector_graphic(fig, figure_dir, [method, '_variable_contribution']);
-                
-                % 关闭图形
-                close(fig);
-            catch ME
-                log_message('warning', sprintf('创建%s方法的变量贡献图失败: %s', method, ME.message));
             end
         end
     end
-end
 end
 
 %% 箱线图可视化函数
@@ -3944,7 +3927,8 @@ function create_boxplot_visualization(results, methods, figure_dir)
     %   figure_dir - 图形保存目录
 
     % 定义性能指标名称
-    metric_names = {'Accuracy', 'Sensitivity', 'Specificity', 'Precision', 'F1_Score', 'AUC'};
+    metric_names = {'Accuracy', 'Precision', 'Recall', 'Specificity', 'F1_Score', 'AUC'};
+    metric_labels = {'准确率', '精确率', '召回率', '特异性', 'F1分数', 'AUC'};
     n_metrics = length(metric_names);
     n_methods = length(methods);
 
@@ -3956,15 +3940,15 @@ function create_boxplot_visualization(results, methods, figure_dir)
             perf = results.(method).performance;
             
             % 检查并填充每个指标的数据
-            data{i, 1} = check_data(perf, 'accuracy', method, 'Accuracy');
-            data{i, 2} = check_data(perf, 'sensitivity', method, 'Sensitivity');
-            data{i, 3} = check_data(perf, 'specificity', method, 'Specificity');
-            data{i, 4} = check_data(perf, 'precision', method, 'Precision');
-            data{i, 5} = check_data(perf, 'f1_score', method, 'F1_Score');
-            data{i, 6} = check_data(perf, 'auc', method, 'AUC');
+            data{i, 1} = check_data(perf, 'accuracy', method, metric_labels{1});
+            data{i, 2} = check_data(perf, 'precision', method, metric_labels{2});
+            data{i, 3} = check_data(perf, 'recall', method, metric_labels{3});
+            data{i, 4} = check_data(perf, 'specificity', method, metric_labels{4});
+            data{i, 5} = check_data(perf, 'f1_score', method, metric_labels{5});
+            data{i, 6} = check_data(perf, 'auc', method, metric_labels{6});
         else
             % 如果方法或性能数据缺失，填充 NaN
-            log_message('warning', sprintf('Method %s is missing in results or performance data', method));
+            log_message('warning', sprintf('方法 %s 在结果中缺失或没有性能数据', method));
             for j = 1:n_metrics
                 data{i, j} = NaN;
             end
@@ -3974,6 +3958,7 @@ function create_boxplot_visualization(results, methods, figure_dir)
     % 为每个指标创建箱线图
     for i = 1:n_metrics
         metric = metric_names{i};
+        metric_label = metric_labels{i};
         
         % 提取当前指标的数据
         metric_data_cell = data(:, i);
@@ -3988,7 +3973,7 @@ function create_boxplot_visualization(results, methods, figure_dir)
         
         % 如果没有有效数据，跳过
         if max_len == 0
-            log_message('warning', sprintf('No valid data available for metric %s', metric));
+            log_message('warning', sprintf('指标 %s 没有有效数据，跳过可视化', metric_label));
             continue;
         end
         
@@ -4004,20 +3989,20 @@ function create_boxplot_visualization(results, methods, figure_dir)
         
         % 验证列数与方法数一致
         if size(metric_data, 2) ~= n_methods
-            log_message('error', sprintf('metric_data has %d columns, but there are %d methods for %s', ...
-                size(metric_data, 2), n_methods, metric));
+            log_message('error', sprintf('metric_data有%d列，但有%d种方法，针对%s', ...
+                size(metric_data, 2), n_methods, metric_label));
             continue;
         end
         
         % 创建图形
-        fig = figure('Name', sprintf('%s Boxplot', metric), 'Position', [100, 100, 1000, 600]);
+        fig = figure('Name', sprintf('%s Boxplot', metric_label), 'Position', [100, 100, 1000, 600]);
         
         % 创建箱线图
         boxplot(metric_data, 'Labels', methods, 'Notch', 'on', 'Symbol', 'r+');
         
         % 设置图形属性
-        title(sprintf('%s分布箱线图 - 各方法比较', metric), 'FontSize', 14, 'FontWeight', 'bold');
-        ylabel(metric, 'FontSize', 12, 'FontWeight', 'bold');
+        title(sprintf('%s分布箱线图 - 各方法比较', metric_label), 'FontSize', 14, 'FontWeight', 'bold');
+        ylabel(metric_label, 'FontSize', 12, 'FontWeight', 'bold');
         grid on;
         
         % 添加均值点
@@ -4045,7 +4030,7 @@ function create_boxplot_visualization(results, methods, figure_dir)
         ylim([ylim_current(1), ylim_current(2) + 0.1]);
         
         % 保存图形
-        save_vector_graphic(fig, figure_dir, sprintf('boxplot_%s', lower(metric)));
+        save_figure(fig, figure_dir, sprintf('boxplot_%s', lower(metric)), 'Formats', {'png', 'pdf'});
         close(fig);
     end
 end
@@ -4055,185 +4040,188 @@ function data_out = check_data(perf, field, method, metric_name)
     if isfield(perf, field) && ~isempty(perf.(field))
         data_out = perf.(field);
     else
-        log_message('warning', sprintf('Method %s has missing or empty %s data', method, metric_name));
+        log_message('warning', sprintf('方法 %s 缺少或有空的 %s 数据', method, metric_name));
         data_out = NaN;
     end
 end
 
-%% 创建精确率-召回率曲线图
+%% 精确率-召回率曲线函数
 function create_pr_curves(results, methods, figure_dir)
-% 创建精确率-召回率曲线图（修复版）
-% 输入:
-%   results - 结果结构
-%   methods - 方法名称列表
-%   figure_dir - 图形保存目录
+    % 创建精确率-召回率曲线图
+    % 输入:
+    %   results - 结果结构
+    %   methods - 方法名称
+    %   figure_dir - 图形保存目录
 
-% 创建高质量图形
-fig = figure('Name', '精确率-召回率曲线比较', 'Position', [100, 100, 1000, 800]);
+    fig = figure('Name', 'Precision-Recall Curves', 'Position', [100, 100, 1000, 800]);
 
-% 定义鲜明的颜色和标记，确保每种方法有独特的视觉标识
-colors = [
-    0.0000, 0.4470, 0.7410;  % 蓝色
-    0.8500, 0.3250, 0.0980;  % 红橙色
-    0.9290, 0.6940, 0.1250;  % 黄色
-    0.4940, 0.1840, 0.5560;  % 紫色
-    0.4660, 0.6740, 0.1880;  % 绿色
-    0.3010, 0.7450, 0.9330;  % 浅蓝色
-    0.6350, 0.0780, 0.1840   % 暗红色
-];
+    colors = lines(length(methods));
+    markers = {'o', 's', 'd', '^', 'v', '>', '<', 'p', 'h'};
+    hold on;
 
-markers = {'o', 's', 'd', '^', 'v', '>', '<'};  % 不同形状的标记
-line_styles = {'-', '-', '-', '-', '-', '-', '--'};  % 线型，随机模型使用虚线
+    legend_entries = cell(length(methods), 1);
 
-hold on;
+    % 创建标准PR曲线点
+    std_recall = linspace(0, 1, 100)';
+    avg_precision = zeros(100, length(methods));
 
-% 为每种方法创建曲线
-legend_entries = cell(length(methods) + 1, 1);  % +1 是为随机模型预留位置
-
-for i = 1:length(methods)
-    method = methods{i};
-    
-    % 获取性能指标
-    recall = results.(method).performance.avg_sensitivity;  % 召回率等于敏感性
-    precision = results.(method).performance.avg_precision;
-    ap = results.(method).performance.avg_precision;  % 平均精确率
-    
-    % 选择颜色和标记
-    color_idx = mod(i-1, size(colors, 1)) + 1;
-    marker_idx = mod(i-1, length(markers)) + 1;
-    
-    % 绘制精确率-召回率点
-    scatter(recall, precision, 100, colors(color_idx,:), 'filled', ...
-        'Marker', markers{marker_idx}, ...
-        'MarkerEdgeColor', 'black', ...
-        'LineWidth', 1.5);
-    
-    % 绘制通过点(0,0)、(recall,precision)、(1,0)的近似PR曲线
-    x_values = [0, recall, 1];
-    y_values = [1, precision, 0];  % PR曲线通常从(0,1)开始
-    
-    % 使用平滑曲线
-    curve_x = linspace(0, 1, 100);
-    curve_y = interp1(x_values, y_values, curve_x, 'pchip');
-    
-    % 绘制曲线
-    plot(curve_x, curve_y, 'Color', colors(color_idx,:), ...
-        'LineStyle', line_styles{i}, ...
-        'LineWidth', 2.5);
-    
-    % 准备图例条目
-    legend_entries{i} = sprintf('%s (AP=%.3f)', method, ap);
-end
-
-% 添加随机分类器的参考线
-random_precision = sum([results.(methods{1}).performance.y_test{:}]) / length([results.(methods{1}).performance.y_test{:}]);
-if isnan(random_precision) || random_precision == 0
-    random_precision = 0.154;  % 使用图例中提供的默认值
-end
-
-% 绘制随机模型的线
-plot([0, 1], [random_precision, random_precision], '--', ...
-    'Color', [0.5, 0.5, 0.5], ...
-    'LineWidth', 2);
-
-legend_entries{end} = sprintf('随机 (Precision=%.3f)', random_precision);
-
-% 设置图形属性
-xlim([0, 1]);
-ylim([0, 1.05]);  % 稍微扩展上限，方便查看接近1的值
-
-% 添加标签和标题
-xlabel('召回率 (Recall)', 'FontSize', 14, 'FontWeight', 'bold');
-ylabel('精确率 (Precision)', 'FontSize', 14, 'FontWeight', 'bold');
-title('不同变量选择方法的精确率-召回率曲线比较', 'FontSize', 16, 'FontWeight', 'bold');
-
-% 添加网格线增强可读性
-grid on;
-box on;
-set(gca, 'FontSize', 12, 'LineWidth', 1.5);
-
-% 添加图例
-leg = legend(legend_entries, 'Location', 'southwest', 'FontSize', 12);
-set(leg, 'Box', 'on', 'LineWidth', 1.5);
-
-% 注释说明
-text(0.05, 0.05, '注: 点表示在测试集上的平均性能', ...
-    'FontSize', 10, 'FontWeight', 'bold');
-
-% 设置图像输出属性
-set(gcf, 'Color', 'white');
-set(gcf, 'PaperPositionMode', 'auto');
-
-% 保存图像
-saveas(fig, fullfile(figure_dir, 'precision_recall_curves.png'));
-saveas(fig, fullfile(figure_dir, 'precision_recall_curves.pdf'));
-
-% 提示
-try
-    save_vector_graphic(fig, figure_dir, 'precision_recall_curves');
-    close(fig);
-catch
-    % 如果save_vector_graphic函数不存在，使用备用方案
-    try
-        print(fig, fullfile(figure_dir, 'precision_recall_curves.svg'), '-dsvg');
-    catch
-        warning('保存SVG格式失败，请检查是否支持该格式');
+    for i = 1:length(methods)
+        method = methods{i};
+        
+        % 计算平均精确率-召回率曲线
+        all_recall = [];
+        all_precision = [];
+        
+        % 如果存在性能结构中的预测概率，使用它们绘制PR曲线
+        if isfield(results.(method).performance, 'y_pred_prob') && ...
+           isfield(results.(method).performance, 'y_test')
+            
+            y_pred_prob = results.(method).performance.y_pred_prob;
+            y_test = results.(method).performance.y_test;
+            
+            % 对每个Bootstrap样本计算PR曲线
+            for j = 1:length(y_pred_prob)
+                if ~isempty(y_pred_prob{j}) && ~isempty(y_test{j})
+                    [precision, recall, ~] = precision_recall_curve(y_test{j}, y_pred_prob{j});
+                    
+                    % 存储所有召回率和精确率值
+                    all_recall = [all_recall; recall];
+                    all_precision = [all_precision; precision];
+                end
+            end
+            
+            % 如果收集到足够的点，绘制平均PR曲线
+            if ~isempty(all_recall) && ~isempty(all_precision)
+                % 对所有样本的召回率进行排序
+                [sorted_recall, idx] = sort(all_recall);
+                sorted_precision = all_precision(idx);
+                
+                % 在标准召回率点计算平均精确率
+                for k = 1:length(std_recall)
+                    r = std_recall(k);
+                    % 找出大于或等于r的最接近点
+                    idx = find(sorted_recall >= r, 1, 'first');
+                    if isempty(idx)
+                        avg_precision(k, i) = 0;
+                    else
+                        avg_precision(k, i) = sorted_precision(idx);
+                    end
+                end
+                
+                % 计算平均精确率 (AP)
+                ap = trapz(std_recall, avg_precision(:, i));
+                
+                % 绘制PR曲线
+                color_idx = mod(i-1, size(colors, 1)) + 1;
+                plot(std_recall, avg_precision(:, i), '-', 'Color', colors(color_idx,:), 'LineWidth', 2);
+                
+                % 在曲线上标记数据点
+                marker_idx = mod(i-1, length(markers)) + 1;
+                num_points = 10; % 均匀分布的点数
+                point_idx = round(linspace(1, length(std_recall), num_points));
+                plot(std_recall(point_idx), avg_precision(point_idx, i), markers{marker_idx}, ...
+                    'Color', colors(color_idx,:), 'MarkerSize', 8, 'MarkerFaceColor', colors(color_idx,:));
+                
+                legend_entries{i} = sprintf('%s (AP=%.3f)', method, ap);
+            else
+                % 使用单点性能指标
+                recall = results.(method).performance.avg_sensitivity;
+                precision = results.(method).performance.avg_precision;
+                
+                color_idx = mod(i-1, size(colors, 1)) + 1;
+                marker_idx = mod(i-1, length(markers)) + 1;
+                
+                plot(recall, precision, markers{marker_idx}, 'Color', colors(color_idx,:), ...
+                    'MarkerSize', 12, 'LineWidth', 2, 'MarkerFaceColor', colors(color_idx,:));
+                
+                legend_entries{i} = sprintf('%s (单点)', method);
+            end
+        else
+            % 使用单点性能指标
+            recall = results.(method).performance.avg_sensitivity;
+            precision = results.(method).performance.avg_precision;
+            
+            color_idx = mod(i-1, size(colors, 1)) + 1;
+            marker_idx = mod(i-1, length(markers)) + 1;
+            
+            plot(recall, precision, markers{marker_idx}, 'Color', colors(color_idx,:), ...
+                'MarkerSize', 12, 'LineWidth', 2, 'MarkerFaceColor', colors(color_idx,:));
+            
+            legend_entries{i} = sprintf('%s (单点)', method);
+        end
     end
-    close(fig);
-end
 
+    % 添加随机分类器的基准线
+    random_precision = sum([results.(methods{1}).performance.avg_sensitivity]) / length(methods);
+    plot([0, 1], [random_precision, random_precision], 'k--', 'LineWidth', 1.5);
+    legend_entries{end+1} = sprintf('随机 (Precision=%.3f)', random_precision);
+
+    % 设置图形属性
+    xlim([0, 1]);
+    ylim([0, 1]);
+    xlabel('召回率 (Recall)', 'FontSize', 12, 'FontWeight', 'bold');
+    ylabel('精确率 (Precision)', 'FontSize', 12, 'FontWeight', 'bold');
+    title('不同变量选择方法的精确率-召回率曲线比较', 'FontSize', 14, 'FontWeight', 'bold');
+    legend(legend_entries, 'Location', 'southwest', 'FontSize', 10);
+    grid on;
+    set(gca, 'FontSize', 11);
+    box on;
+
+    % 保存图形
+    save_figure(fig, figure_dir, 'precision_recall_curves', 'Formats', {'png', 'pdf'});
+    close(fig);
 end
 
 % 辅助函数：计算精确率-召回率曲线
-afunction [precision, recall, thresholds] = precision_recall_curve(y_true, y_score)
-% 计算精确率-召回率曲线
-% 输入:
-%   y_true - 真实标签
-%   y_score - 预测分数或概率
-% 输出:
-%   precision - 精确率
-%   recall - 召回率
-%   thresholds - 阈值
+function [precision, recall, thresholds] = precision_recall_curve(y_true, y_score)
+    % 计算精确率-召回率曲线
+    % 输入:
+    %   y_true - 真实标签
+    %   y_score - 预测分数或概率
+    % 输出:
+    %   precision - 精确率
+    %   recall - 召回率
+    %   thresholds - 阈值
 
-% 获取唯一的阈值，以降序排列
-thresholds = sort(unique(y_score), 'descend');
+    % 获取唯一的阈值，以降序排列
+    thresholds = sort(unique(y_score), 'descend');
 
-% 添加0作为最后一个阈值
-thresholds = [thresholds; -Inf];
+    % 添加0作为最后一个阈值
+    thresholds = [thresholds; -Inf];
 
-n_thresholds = length(thresholds);
-precision = zeros(n_thresholds, 1);
-recall = zeros(n_thresholds, 1);
+    n_thresholds = length(thresholds);
+    precision = zeros(n_thresholds, 1);
+    recall = zeros(n_thresholds, 1);
 
-for i = 1:n_thresholds
-    threshold = thresholds(i);
-    
-    % 在当前阈值下的预测
-    y_pred = y_score >= threshold;
-    
-    % 计算混淆矩阵元素
-    TP = sum(y_pred == 1 & y_true == 1);
-    FP = sum(y_pred == 1 & y_true == 0);
-    FN = sum(y_pred == 0 & y_true == 1);
-    
-    % 计算精确率和召回率
-    if TP + FP == 0
-        precision(i) = 1;  % 如果没有阳性预测，精确率为1
-    else
-        precision(i) = TP / (TP + FP);
+    for i = 1:n_thresholds
+        threshold = thresholds(i);
+        
+        % 在当前阈值下的预测
+        y_pred = y_score >= threshold;
+        
+        % 计算混淆矩阵元素
+        TP = sum(y_pred == 1 & y_true == 1);
+        FP = sum(y_pred == 1 & y_true == 0);
+        FN = sum(y_pred == 0 & y_true == 1);
+        
+        % 计算精确率和召回率
+        if TP + FP == 0
+            precision(i) = 1;  % 如果没有阳性预测，精确率为1
+        else
+            precision(i) = TP / (TP + FP);
+        end
+        
+        if TP + FN == 0
+            recall(i) = 0;  % 如果没有真阳性，召回率为0
+        else
+            recall(i) = TP / (TP + FN);
+        end
     end
-    
-    if TP + FN == 0
-        recall(i) = 0;  % 如果没有真阳性，召回率为0
-    else
-        recall(i) = TP / (TP + FN);
-    end
-end
 
-% 确保精确率-召回率曲线是单调递减的
-for i = n_thresholds-1:-1:1
-    precision(i) = max(precision(i), precision(i+1));
-end
+    % 确保精确率-召回率曲线是单调递减的
+    for i = n_thresholds-1:-1:1
+        precision(i) = max(precision(i), precision(i+1));
+    end
 end
 
 %% 校准曲线图函数
@@ -4326,7 +4314,7 @@ set(gca, 'FontSize', 11);
 box on;
 
 % 保存图形
-save_vector_graphic(fig, figure_dir, 'calibration_curves');
+save_figure(fig, figure_dir, 'calibration_curves', 'Formats', {'png', 'pdf', 'svg'});
 close(fig);
 end
 
@@ -4585,126 +4573,70 @@ end
 
 %% 创建ROC曲线图
 function create_roc_curves(results, methods, figure_dir)
-% 创建ROC曲线图
-% 输入:
-%   results - 结果结构
-%   methods -
-%   figure_dir - 图形保存目录
-
-% 创建高质量图形
-fig = figure('Name', 'ROC曲线比较', 'Position', [100, 100, 1000, 800]);
-
-% 定义鲜明的颜色和标记，确保每种方法有独特的视觉标识
-colors = [
-    0.0000, 0.4470, 0.7410;  % 蓝色
-    0.8500, 0.3250, 0.0980;  % 红橙色
-    0.9290, 0.6940, 0.1250;  % 黄色
-    0.4940, 0.1840, 0.5560;  % 紫色
-    0.4660, 0.6740, 0.1880;  % 绿色
-    0.3010, 0.7450, 0.9330;  % 浅蓝色
-    0.6350, 0.0780, 0.1840   % 暗红色
-];
-
-markers = {'o', 's', 'd', '^', 'v', '>', '<'};  % 不同形状的标记
-line_styles = {'-', '-', '-', '-', '-', '-', '--'};  % 线型，随机模型使用虚线
-
-hold on;
-
-% 为每种方法创建曲线
-legend_entries = cell(length(methods) + 1, 1);  % +1 是为随机模型预留位置
-
-for i = 1:length(methods)
-    method = methods{i};
+    % 创建ROC曲线图，使用统一保存函数
+    % 输入:
+    %   results - 结果结构
+    %   methods - 方法名称
+    %   figure_dir - 图形保存目录
     
-    % 获取性能指标
-    auc = results.(method).performance.avg_auc;
-    sensitivity = results.(method).performance.avg_sensitivity;
-    specificity = results.(method).performance.avg_specificity;
-    f1_score = results.(method).performance.avg_f1_score;
+    fig = figure('Name', 'ROC Curves', 'Position', [100, 100, 1000, 800]);
     
-    % 计算假阳性率（1-特异性）
-    fpr = 1 - specificity;
-    tpr = sensitivity;
-    
-    % 选择颜色和标记
-    color_idx = mod(i-1, size(colors, 1)) + 1;
-    marker_idx = mod(i-1, length(markers)) + 1;
-    
-    % 绘制ROC点
-    scatter(fpr, tpr, 150, colors(color_idx,:), 'filled', ...
-        'Marker', markers{marker_idx}, ...
-        'MarkerEdgeColor', 'black', ...
-        'LineWidth', 1.5);
-    
-    % 绘制通过点(0,0)、(fpr,tpr)、(1,1)的近似ROC曲线
-    x_values = [0, fpr, 1];
-    y_values = [0, tpr, 1];
-    
-    % 使用平滑曲线
-    curve_x = linspace(0, 1, 100);
-    curve_y = interp1(x_values, y_values, curve_x, 'pchip');
-    
-    % 绘制曲线
-    plot(curve_x, curve_y, 'Color', colors(color_idx,:), ...
-        'LineStyle', line_styles{i}, ...
-        'LineWidth', 2.5);
-    
-    % 准备图例条目
-    legend_entries{i} = sprintf('%s (AUC=%.3f, F1=%.3f)', method, auc, f1_score);
-end
+    % 禁用工具栏，减少文件大小
+    set(gcf, 'Toolbar', 'none');
 
-% 添加随机猜测的参考线
-plot([0, 1], [0, 1], '--', 'Color', [0.5, 0.5, 0.5], 'LineWidth', 2);
-legend_entries{end} = '随机猜测';
+    colors = lines(length(methods));
+    markers = {'o', 's', 'd', '^', 'v', '>', '<', 'p', 'h'};
+    hold on;
 
-% 设置图形属性
-xlim([0, 1]);
-ylim([0, 1.05]);  % 稍微扩展上限，方便查看接近1的值
+    legend_entries = cell(length(methods), 1);
 
-% 添加标签和标题
-xlabel('假阳性率 (1 - 特异性)', 'FontSize', 14, 'FontWeight', 'bold');
-ylabel('真阳性率 (敏感性)', 'FontSize', 14, 'FontWeight', 'bold');
-title('不同变量选择方法的ROC曲线比较', 'FontSize', 16, 'FontWeight', 'bold');
+    for i = 1:length(methods)
+        method = methods{i};
+        auc = results.(method).performance.avg_auc;
+        sensitivity = results.(method).performance.avg_sensitivity;
+        specificity = results.(method).performance.avg_specificity;
+        precision = results.(method).performance.avg_precision;
+        f1_score = results.(method).performance.avg_f1_score;
 
-% 添加网格线增强可读性
-grid on;
-box on;
-set(gca, 'FontSize', 12, 'LineWidth', 1.5);
+        fpr = 1 - specificity;
+        color_idx = mod(i-1, size(colors, 1)) + 1;
+        marker_idx = mod(i-1, length(markers)) + 1;
 
-% 添加图例
-leg = legend(legend_entries, 'Location', 'southeast', 'FontSize', 12);
-set(leg, 'Box', 'on', 'LineWidth', 1.5);
+        plot(fpr, sensitivity, [markers{marker_idx}], 'Color', colors(color_idx,:), ...
+            'MarkerSize', 12, 'LineWidth', 2, 'MarkerFaceColor', colors(color_idx,:));
+        plot([0, fpr, 1], [0, sensitivity, 1], '-', 'Color', colors(color_idx,:), 'LineWidth', 1.5);
 
-% 注释说明
-text(0.05, 0.95, '注: 点表示在测试集上的平均性能', ...
-    'FontSize', 10, 'FontWeight', 'bold');
-
-% 设置图像输出属性
-set(gcf, 'Color', 'white');
-set(gcf, 'PaperPositionMode', 'auto');
-
-% 保存图像
-saveas(fig, fullfile(figure_dir, 'roc_curves.png'));
-saveas(fig, fullfile(figure_dir, 'roc_curves.pdf'));
-
-% 提示
-try
-    save_vector_graphic(fig, figure_dir, 'roc_curves');
-    close(fig);
-catch
-    % 如果save_vector_graphic函数不存在，使用备用方案
-    try
-        print(fig, fullfile(figure_dir, 'roc_curves.svg'), '-dsvg');
-    catch
-        warning('保存SVG格式失败，请检查是否支持该格式');
+        legend_entries{i} = sprintf('%s (AUC=%.3f, F1=%.3f)', method, auc, f1_score);
     end
+
+    plot([0, 1], [0, 1], 'k--', 'LineWidth', 1.5);
+
+    xlim([0, 1]);
+    ylim([0, 1]);
+    xlabel('假阳性率 (1 - 特异性)', 'FontSize', 12, 'FontWeight', 'bold');
+    ylabel('真阳性率 (敏感性)', 'FontSize', 12, 'FontWeight', 'bold');
+    title('不同变量选择方法的ROC曲线比较', 'FontSize', 14, 'FontWeight', 'bold');
+    legend([legend_entries; {'随机猜测'}], 'Location', 'southeast', 'FontSize', 10);
+    grid on;
+    set(gca, 'FontSize', 11);
+    box on;
+
+    text(0.05, 0.95, '注: 点表示在测试集上的平均性能', 'FontSize', 9);
+
+    % 使用统一保存函数，指定保存格式和BestFit选项
+    save_figure(fig, figure_dir, 'roc_curves', 'Formats', {'png', 'pdf', 'svg'}, 'BestFit', true);
     close(fig);
 end
 
-end
-
-%% 修改2：修复create_variable_importance_plot函数
+%% 变量重要性绘图函数
 function create_variable_importance_plot(results, methods, var_names, figure_dir)
+    % 创建变量重要性图，使用统一保存函数
+    % 输入:
+    %   results - 结果结构
+    %   methods - 方法名称
+    %   var_names - 变量名称
+    %   figure_dir - 图形保存目录
+    
     % 计算每个变量的平均频率
     var_freq = zeros(length(var_names), 1);
     for i = 1:length(methods)
@@ -4716,15 +4648,15 @@ function create_variable_importance_plot(results, methods, var_names, figure_dir
     [sorted_freq, idx] = sort(var_freq, 'descend');
     sorted_names = var_names(idx);
 
-    ;
     fig = figure('Name', 'Variable Importance', 'Position', [100, 100, 900, 700]);
     
-    % 禁用工具栏
+    % 禁用工具栏，减少文件大小
     set(gcf, 'Toolbar', 'none');
 
     h = barh(sorted_freq);
     set(h, 'FaceColor', 'flat');
 
+    % 使用渐变色增强视觉效果
     colormap(autumn);
     for i = 1:length(sorted_freq)
         h.CData(i,:) = [sorted_freq(i), 0.5, 1-sorted_freq(i)];
@@ -4736,6 +4668,7 @@ function create_variable_importance_plot(results, methods, var_names, figure_dir
     grid on;
     box on;
 
+    % 添加数值标签
     for i = 1:length(sorted_freq)
         text(sorted_freq(i) + 0.03, i, sprintf('%.2f', sorted_freq(i)), ...
             'VerticalAlignment', 'middle', 'FontSize', 9);
@@ -4745,23 +4678,16 @@ function create_variable_importance_plot(results, methods, var_names, figure_dir
         ['注: 此图显示每个变量在', num2str(length(methods)), '种方法中的平均选择频率'], ...
         'FontSize', 9, 'HorizontalAlignment', 'center');
 
-    set(gcf, 'Color', 'white');
-    set(gca, 'TickDir', 'out');
-    set(gcf, 'Position', [100, 100, 900, max(500, 150 + 30*length(sorted_names))]);
+    % 自动调整图形高度以适应变量数量
+    fig_height = max(500, 150 + 30*length(sorted_names));
+    set(gcf, 'Position', [100, 100, 900, fig_height]);
 
-    % 设置纸张属性
-    set(gcf, 'PaperPositionMode', 'manual');
-    set(gcf, 'PaperUnits', 'inches');
-    set(gcf, 'PaperSize', [10 8]); % 设置为 10x8 英寸
-    set(gcf, 'PaperPosition', [0 0 10 8]);
-
-    % 保存矢量图
-    save_vector_graphic(fig, figure_dir, 'variable_importance');
-
+    % 使用统一保存函数
+    save_figure(fig, figure_dir, 'variable_importance', 'Formats', {'png', 'pdf'});
     close(fig);
 end
 
-%% 修改3：修复create_variable_group_plot函数中的保存图形部分
+%% 变量组合可视化函数
 function create_variable_group_plot(results, methods, var_names, figure_dir)
     % 创建变量组合可视化图
     % 输入:
@@ -4775,7 +4701,7 @@ function create_variable_group_plot(results, methods, var_names, figure_dir)
         method = methods{i};
         group_perf = results.(method).group_performance;
         
-        % 如果有至少3个不同的组合，则创建图
+        % 如果有至少2个不同的组合，则创建图
         if length(group_perf) >= 2
             % 取前10个最常见的组合
             top_n = min(10, length(group_perf));
@@ -4839,7 +4765,7 @@ function create_variable_group_plot(results, methods, var_names, figure_dir)
             legend({'准确率', '敏感性', '特异性'}, 'Location', 'southeast', 'FontSize', 8);
             grid on;
             
-            % 创建子图4：精确率（新增）
+            % 创建子图4：精确率
             subplot(2, 2, 4);
             bar(combo_prec, 'FaceColor', [0.6 0.3 0.8]);
             set(gca, 'XTick', 1:top_n, 'XTickLabel', combo_labels, 'XTickLabelRotation', 45, 'FontSize', 9);
@@ -4847,12 +4773,8 @@ function create_variable_group_plot(results, methods, var_names, figure_dir)
             ylabel('精确率', 'FontSize', 10);
             grid on;
             
-            % 调整整体间距
-            set(gcf, 'Color', 'white');
-            set(fig1, 'Position', [100, 100, 1200, 800]);
-            
-            % 保存矢量图 - 注意这里传入方法名
-            save_vector_graphic(fig1, figure_dir, '%s_variable_combinations', method);
+            % 保存图形
+            save_figure(fig1, figure_dir, 'variable_combinations', 'MethodName', method);
             close(fig1);
             
             % 创建组合详情图
@@ -4884,15 +4806,15 @@ function create_variable_group_plot(results, methods, var_names, figure_dir)
             h.YLabel = '组合';
             h.FontSize = 10;
             
-            % 保存矢量图 - 注意这里传入方法名
-            save_vector_graphic(fig2, figure_dir, '%s_combination_details', method);
+            % 保存图形
+            save_figure(fig2, figure_dir, 'combination_details', 'MethodName', method);
             close(fig2);
         else
-            log_message('info', sprintf('%s方法的变量组合少于3个，跳过可视化', method));
+            log_message('info', sprintf('%s方法的变量组合少于2个，跳过可视化', method));
         end
     end
 
-    % 修复创建所有方法的综合比较图部分
+    % 创建所有方法的综合比较图
     try
         % 从所有方法中收集组合信息
         all_combos = struct('method', {}, 'vars', {}, 'auc', {}, 'f1', {}, 'count', {});
@@ -4921,7 +4843,7 @@ function create_variable_group_plot(results, methods, var_names, figure_dir)
             counts = [all_combos.count];
             vars_list = {all_combos.vars};
             
-            % 创建气泡图（使用F1分数作为Y轴）
+            % 创建气泡图
             scatter(1:length(all_combos), f1s, counts*10, aucs*50, 'filled', 'MarkerFaceAlpha', 0.7);
             colormap(jet);
             colorbar;
@@ -4941,8 +4863,8 @@ function create_variable_group_plot(results, methods, var_names, figure_dir)
             text(length(all_combos)/2, min(f1s)-0.1, '注: 气泡大小表示组合出现频率，颜色表示AUC值', ...
                 'HorizontalAlignment', 'center', 'FontSize', 10);
             
-            % 保存矢量图
-            save_vector_graphic(fig3, figure_dir, 'top_combinations_comparison');
+            % 保存图形
+            save_figure(fig3, figure_dir, 'top_combinations_comparison', 'Formats', {'png', 'pdf'});
             close(fig3);
         end
     catch ME
@@ -4950,51 +4872,52 @@ function create_variable_group_plot(results, methods, var_names, figure_dir)
     end
 end
 
-%% 通用图片保存函数 - 改进版
-function save_figure(fig, figure_dir, base_name, formats, dpi, method_name)
-% 增强版的图形保存函数 - 支持方法名称替换
+%% 统一图形保存函数
+function save_figure(fig, output_dir, filename_base, varargin)
+% 统一的图形保存函数，支持多种格式和高级选项
 % 输入:
 %   fig - 图形句柄
-%   figure_dir - 保存目录
-%   base_name - 基本文件名(不含扩展名)
-%   formats - 要保存的格式列表
-%   dpi - 分辨率
-%   method_name - 可选的方法名称，用于替换文件名中的%s
+%   output_dir - 输出目录
+%   filename_base - 基本文件名（可包含%s，将被method_name替换）
+% 可选命名参数:
+%   'Formats' - 要保存的格式列表，默认为 {'png', 'pdf'}
+%   'DPI' - 分辨率，默认为300
+%   'MethodName' - 方法名称，用于替换文件名中的%s
+%   'BestFit' - 是否使用最佳适配选项，默认为true
 
-    % 参数检查
-    if nargin < 4
-        formats = {'png'}; 
+    % 解析输入参数
+    p = inputParser;
+    addParameter(p, 'Formats', {'png', 'pdf'}, @(x) iscell(x) || ischar(x));
+    addParameter(p, 'DPI', 300, @isnumeric);
+    addParameter(p, 'MethodName', '', @ischar);
+    addParameter(p, 'BestFit', true, @islogical);
+    parse(p, varargin{:});
+    
+    formats = p.Results.Formats;
+    dpi = p.Results.DPI;
+    method_name = p.Results.MethodName;
+    use_bestfit = p.Results.BestFit;
+    
+    % 如果formats是字符串，转换为cell数组
+    if ischar(formats)
+        formats = {formats};
     end
     
-    if nargin < 5
-        dpi = 300; 
+    % 确保输出目录存在
+    if ~exist(output_dir, 'dir')
+        mkdir(output_dir);
     end
     
-    if nargin < 6
-        method_name = '';
-    end
-    
-    % 确保目录存在
-    if ~exist(figure_dir, 'dir')
-        mkdir(figure_dir);
-    end
-    
-    % 改进: 检查文件名中是否包含%s，如果包含但没有提供method_name，给出警告并提供默认替换
-    if contains(base_name, '%s')
-        if isempty(method_name)
-            % 记录警告
-            if exist('log_message', 'file') == 2
-                log_message('warning', ['文件名中包含%s但未提供method_name，使用默认值"unknown"替换']);
-            else
-                warning('文件名中包含%%s但未提供method_name，使用默认值"unknown"替换');
-            end
-            
-            % 使用默认值替换%s
-            base_name = strrep(base_name, '%s', 'unknown');
+    % 处理文件名中的方法名称替换
+    if contains(filename_base, '%s')
+        if ~isempty(method_name)
+            actual_filename = strrep(filename_base, '%s', method_name);
         else
-            % 正常替换
-            base_name = strrep(base_name, '%s', method_name);
+            actual_filename = strrep(filename_base, '%s', 'unknown');
+            log_message('warning', '文件名中包含%s但未提供method_name');
         end
+    else
+        actual_filename = filename_base;
     end
     
     % 准备图形
@@ -5007,19 +4930,7 @@ function save_figure(fig, figure_dir, base_name, formats, dpi, method_name)
         leg = findobj(ax(i), 'Type', 'Legend');
         if ~isempty(leg)
             % 确保图例处于最佳位置
-            leg.Location = leg.Location; 
-            leg.FontSize = leg.FontSize;
-            
-            % 尝试将图例放在更合适的位置
-            if strcmp(leg.Location, 'best')
-                % 如果是自动位置，可以根据数据分布计算更好的位置
-                axes_pos = get(ax(i), 'Position');
-                if axes_pos(1) < 0.4 % 如果图形在左侧
-                    leg.Location = 'northeast';
-                else
-                    leg.Location = 'northwest';
-                end
-            end
+            leg.FontSize = max(leg.FontSize, 9);
         end
         
         % 确保轴标签清晰可见
@@ -5027,12 +4938,13 @@ function save_figure(fig, figure_dir, base_name, formats, dpi, method_name)
         
         % 调整刻度，避免重叠
         set(ax(i), 'TickDir', 'out');
-        ax(i).XAxis.TickLength = [0.02 0.02];
-        ax(i).YAxis.TickLength = [0.02 0.02];
     end
     
-    % 设置适当的纸张属性
-    set(fig, 'PaperPositionMode', 'auto');
+    % 设置纸张属性
+    set(fig, 'PaperPositionMode', 'manual');
+    set(fig, 'PaperUnits', 'inches');
+    set(fig, 'PaperSize', [10 8]); % 设置为 10x8 英寸
+    set(fig, 'PaperPosition', [0 0 10 8]);
     
     % 初始化成功保存的格式列表
     successful_formats = {};
@@ -5040,174 +4952,50 @@ function save_figure(fig, figure_dir, base_name, formats, dpi, method_name)
     % 保存每种格式
     for i = 1:length(formats)
         format = lower(formats{i});
-        filename = fullfile(figure_dir, [base_name '.' format]);
+        filename = fullfile(output_dir, [actual_filename '.' format]);
         
         try
-            % SVG格式特殊处理 - 直接使用print而不尝试exportgraphics
-            if strcmp(format, 'svg')
-                print(fig, filename, '-dsvg');
-                successful_formats{end+1} = upper(format);
-                continue;
+            % 根据不同的格式选择不同的保存方法
+            switch format
+                case {'png', 'jpg', 'jpeg', 'tiff', 'bmp'}
+                    % 位图格式
+                    print(fig, filename, ['-d' format], ['-r' num2str(dpi)]);
+                    
+                case 'pdf'
+                    % PDF格式
+                    if use_bestfit
+                        print(fig, filename, '-dpdf', '-bestfit');
+                    else
+                        print(fig, filename, '-dpdf');
+                    end
+                    
+                case 'eps'
+                    % EPS格式
+                    print(fig, filename, '-depsc2');
+                    
+                case 'svg'
+                    % SVG格式
+                    print(fig, filename, '-dsvg');
+                    
+                otherwise
+                    % 其他格式
+                    saveas(fig, filename);
             end
             
-            % 其他格式尝试使用exportgraphics
-            options = {};
-            
-            % 对于矢量格式
-            if ismember(format, {'pdf', 'eps'})
-                options = [options, {'ContentType', 'vector'}];
-            else
-                % 对于位图格式设置分辨率
-                options = [options, {'Resolution', dpi}];
-                
-                % 对于PNG，添加透明背景
-                if strcmp(format, 'png')
-                    options = [options, {'BackgroundColor', 'none'}];
-                end
-            end
-            
-            % 使用exportgraphics保存
-            exportgraphics(fig, filename, options{:});
             successful_formats{end+1} = upper(format);
             
         catch ME
-            % 详细记录错误信息
-            if exist('log_message', 'file') == 2
-                log_message('debug', ['保存' upper(format) '格式时出错: ' ME.message]);
-            else
-                warning(['保存' upper(format) '格式时出错: ' ME.message]);
-            end
+            % 保存失败，记录错误并尝试备用方法
+            log_message('debug', ['保存' upper(format) '格式时出错: ' ME.message]);
             
             % 尝试备用方法
             try
-                switch format
-                    case {'png', 'jpg', 'tiff'}
-                        print(fig, filename, ['-d' format], ['-r' num2str(dpi)]);
-                    case {'pdf', 'eps', 'svg'}
-                        print(fig, filename, ['-d' format]);
-                    otherwise
-                        saveas(fig, filename);
-                end
-                
+                % 备用保存方法
+                saveas(fig, filename);
                 successful_formats{end+1} = upper(format);
             catch ME2
-                if exist('log_message', 'file') == 2
-                    log_message('error', ['所有' upper(format) '保存方法均失败: ' ME2.message]);
-                else
-                    warning(['所有' upper(format) '保存方法均失败: ' ME2.message]);
-                end
+                log_message('warning', ['备用保存方法也失败: ' ME2.message]);
             end
-        end
-    end
-    
-    % 输出汇总日志消息
-    if ~isempty(successful_formats)
-        % 获取没有路径的文件名基础部分
-        [~, file_basename, ~] = fileparts(base_name);
-        
-        % 格式化成功保存的格式列表
-        formats_str = strjoin(successful_formats, ', ');
-        
-        % 输出汇总日志
-        if exist('log_message', 'file') == 2
-            log_message('info', sprintf('成功保存图形: %s (%s)', file_basename, formats_str));
-        else
-            disp(sprintf('成功保存图形: %s (%s)', file_basename, formats_str));
-        end
-    else
-        % 如果没有任何格式保存成功
-        if exist('log_message', 'file') == 2
-            log_message('error', ['图形保存失败: ' base_name]);
-        else
-            warning(['图形保存失败: ' base_name]);
-        end
-    end
-end
-
-%% 矢量图保存函数
-function save_vector_graphic(fig, output_dir, filename_base, method_name)
-% 专注于矢量图格式的图形保存函数
-% 输入:
-%   fig - 图形句柄
-%   output_dir - 输出目录
-%   filename_base - 基本文件名（可包含%s，将被method_name替换）
-%   method_name - 方法名称，用于替换文件名中的%s
-
-    % 确保输出目录存在
-    if ~exist(output_dir, 'dir')
-        mkdir(output_dir);
-    end
-    
-    % 处理文件名中的方法名称替换
-    if nargin < 4
-        method_name = '';
-    end
-    
-    if contains(filename_base, '%s')
-        if ~isempty(method_name)
-            actual_filename = strrep(filename_base, '%s', method_name);
-        else
-            actual_filename = strrep(filename_base, '%s', 'unknown');
-            log_message('warning', '文件名中包含%s但未提供method_name');
-        end
-    else
-        actual_filename = filename_base;
-    end
-    
-    % 初始化成功保存的格式列表
-    successful_formats = {};
-    
-    % 保存PNG格式
-    format = 'png';
-    png_path = fullfile(output_dir, [actual_filename, '.', format]);
-    try
-        print(fig, png_path, '-dpng', '-r300');
-        successful_formats{end+1} = upper(format);
-    catch ME
-        log_message('debug', ['保存PNG失败: ', ME.message]);
-    end
-    
-    % 保存PDF矢量格式
-    format = 'pdf';
-    pdf_path = fullfile(output_dir, [actual_filename, '.', format]);
-    try
-        print(fig, pdf_path, '-dpdf', '-bestfit');
-        successful_formats{end+1} = upper(format);
-    catch ME
-        log_message('debug', ['保存PDF失败: ', ME.message]);
-    end
-    
-    % 尝试保存EPS矢量格式
-    format = 'eps';
-    eps_path = fullfile(output_dir, [actual_filename, '.', format]);
-    try
-        print(fig, eps_path, '-depsc2');
-        successful_formats{end+1} = upper(format);
-    catch ME
-        log_message('debug', ['保存EPS失败: ', ME.message]);
-    end
-    
-    % 尝试保存SVG矢量格式
-    format = 'svg';
-    svg_path = fullfile(output_dir, [actual_filename, '.', format]);
-    try
-        % 对于SVG格式，选项更加特定
-        print(fig, svg_path, '-dsvg');
-        successful_formats{end+1} = upper(format);
-    catch ME
-        log_message('debug', ['保存SVG失败: ', ME.message]);
-        % SVG失败时尝试备用方案
-        try
-            % 直接使用saveas函数
-            saveas(fig, svg_path, 'svg');
-            
-            % 检查是否已经添加过SVG格式
-            if ~ismember('SVG', successful_formats)
-                successful_formats{end+1} = 'SVG';
-            end
-            
-        catch ME2
-            log_message('error', ['所有SVG保存方法均失败: ', ME2.message]);
         end
     end
     
@@ -5219,8 +5007,14 @@ function save_vector_graphic(fig, output_dir, filename_base, method_name)
         % 格式化成功保存的格式列表
         formats_str = strjoin(successful_formats, ', ');
         
-        % 输出汇总日志
-        log_message('info', sprintf('成功保存图形: %s (%s)', file_basename, formats_str));
+        % 如果是调试级别，只记录一条简短的日志
+        log_level = get_log_level();
+        if strcmpi(log_level, 'debug')
+            log_message('debug', sprintf('保存图形: %s (%s)', file_basename, formats_str));
+        else
+            % 对于其他级别，只记录一条简短的信息日志
+            log_message('info', sprintf('成功保存图形: %s (%s)', file_basename, formats_str));
+        end
     else
         % 如果没有任何格式保存成功
         log_message('error', ['图形保存失败: ' actual_filename]);

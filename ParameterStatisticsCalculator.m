@@ -272,6 +272,56 @@ classdef ParameterStatisticsCalculator < handle
                 xtickangle(45);
             end
             
+            % 显著性 (-log10(p值))
+            subplot(2, 2, 2);
+            logp = -log10(obj.pValues);
+            bar(logp);
+            hold on;
+            % 添加显著性线 (p=0.05, -log10(0.05)≈1.3)
+            yline(1.3, '--r', 'p=0.05');
+            hold off;
+            title('参数显著性 (-log10(p值))');
+            xlabel('参数');
+            ylabel('-log10(p值)');
+            
+            if ~isempty(obj.parameterNames)
+                xticks(1:numParams);
+                xticklabels(obj.parameterNames);
+                xtickangle(45);
+            end
+            
+            % VIF值
+            subplot(2, 2, 3);
+            bar(obj.vifValues);
+            hold on;
+            % 添加VIF警戒线 (VIF=5和VIF=10)
+            yline(5, '--g', 'VIF=5');
+            yline(10, '--r', 'VIF=10');
+            hold off;
+            title('方差膨胀因子 (VIF)');
+            xlabel('参数');
+            ylabel('VIF值');
+            
+            if ~isempty(obj.parameterNames)
+                xticks(1:numParams);
+                xticklabels(obj.parameterNames);
+                xtickangle(45);
+            end
+            
+            % 标准化估计值
+            subplot(2, 2, 4);
+            stdCoefs = obj.coefficients ./ max(abs(obj.coefficients)) * 100;
+            bar(stdCoefs);
+            title('标准化参数估计 (% of max)');
+            xlabel('参数');
+            ylabel('标准化估计值 (%)');
+            
+            if ~isempty(obj.parameterNames)
+                xticks(1:numParams);
+                xticklabels(obj.parameterNames);
+                xtickangle(45);
+            end
+            
             sgtitle('参数统计分析');
             
             obj.logger.info('参数估计可视化图已生成');
@@ -540,54 +590,4 @@ classdef ParameterStatisticsCalculator < handle
             ci = [beta - tCritical * se, beta + tCritical * se];
         end
     end
-end(45);
-            end
-            
-            % 显著性 (-log10(p值))
-            subplot(2, 2, 2);
-            logp = -log10(obj.pValues);
-            bar(logp);
-            hold on;
-            % 添加显著性线 (p=0.05, -log10(0.05)≈1.3)
-            yline(1.3, '--r', 'p=0.05');
-            hold off;
-            title('参数显著性 (-log10(p值))');
-            xlabel('参数');
-            ylabel('-log10(p值)');
-            
-            if ~isempty(obj.parameterNames)
-                xticks(1:numParams);
-                xticklabels(obj.parameterNames);
-                xtickangle(45);
-            end
-            
-            % VIF值
-            subplot(2, 2, 3);
-            bar(obj.vifValues);
-            hold on;
-            % 添加VIF警戒线 (VIF=5和VIF=10)
-            yline(5, '--g', 'VIF=5');
-            yline(10, '--r', 'VIF=10');
-            hold off;
-            title('方差膨胀因子 (VIF)');
-            xlabel('参数');
-            ylabel('VIF值');
-            
-            if ~isempty(obj.parameterNames)
-                xticks(1:numParams);
-                xticklabels(obj.parameterNames);
-                xtickangle(45);
-            end
-            
-            % 标准化估计值
-            subplot(2, 2, 4);
-            stdCoefs = obj.coefficients ./ max(abs(obj.coefficients)) * 100;
-            bar(stdCoefs);
-            title('标准化参数估计 (% of max)');
-            xlabel('参数');
-            ylabel('标准化估计值 (%)');
-            
-            if ~isempty(obj.parameterNames)
-                xticks(1:numParams);
-                xticklabels(obj.parameterNames);
-                xtickangle
+end

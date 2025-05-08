@@ -1,22 +1,41 @@
 # Binomial
+
 配置文件模块 (BinomialConfig)
+
 日志管理模块 (BinomialLogger)
+
 主分析器类 (BinomialAnalyzer)
+
 数据管理模块 (DataManager)
+
 并行计算管理模块 (ParallelManager)
+
 GPU管理模块 (GPUManager)
+
 多重共线性检查模块 (CollinearityChecker)
+
 相关性分析模块 (CorrelationAnalyzer)
+
 Bootstrap采样模块 (BootstrapSampler)
+
 K折交叉验证模块 (CrossValidator)
+
 变量选择模块 (VariableSelector)
+
 系数稳定性监控模块 (CoefficientStabilityMonitor)
+
 参数统计分析模块 (ParameterStatisticsCalculator)
+
 变量贡献评估模块 (VariableContributionEvaluator)
+
 残差分析模块 (ResidualAnalyzer)
+
 结果可视化模块 (ResultVisualizer)
+
 结果保存模块 (ResultSaver)
+
 报告生成模块 (ReportGenerator)
+
 主执行函数 (Binomial)
 
 # 第一部分 配置文件模块 (BinomialConfig)

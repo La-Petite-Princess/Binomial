@@ -1,4 +1,24 @@
 # Binomial
+配置文件模块 (BinomialConfig)
+日志管理模块 (BinomialLogger)
+主分析器类 (BinomialAnalyzer)
+数据管理模块 (DataManager)
+并行计算管理模块 (ParallelManager)
+GPU管理模块 (GPUManager)
+多重共线性检查模块 (CollinearityChecker)
+相关性分析模块 (CorrelationAnalyzer)
+Bootstrap采样模块 (BootstrapSampler)
+K折交叉验证模块 (CrossValidator)
+变量选择模块 (VariableSelector)
+系数稳定性监控模块 (CoefficientStabilityMonitor)
+参数统计分析模块 (ParameterStatisticsCalculator)
+变量贡献评估模块 (VariableContributionEvaluator)
+残差分析模块 (ResidualAnalyzer)
+结果可视化模块 (ResultVisualizer)
+结果保存模块 (ResultSaver)
+报告生成模块 (ReportGenerator)
+主执行函数 (Binomial)
+
 旧代码
 https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/Binomial_old.m
 
@@ -71,7 +91,6 @@ https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/README.md
 
 
 
-用户提到了一系列的代码优化需求，主要包括：
 
 模块化设计
 提取重复逻辑
@@ -90,73 +109,6 @@ https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/README.md
 用户提到已经将代码上传到GitHub，需要我从GitHub获取代码，然后根据这些要求进行优化。优化后的代码如果过长可以分类发送。
 我需要先获取GitHub上的代码，看一下具体的内容，然后根据用户的要求进行优化。
 首先，我需要使用web_fetch工具获取代码内容。
-
-
-配置文件模块 (BinomialConfig)
-日志管理模块 (BinomialLogger)
-主分析器类 (BinomialAnalyzer)
-数据管理模块 (DataManager)
-并行计算管理模块 (ParallelManager)
-GPU管理模块 (GPUManager)
-多重共线性检查模块 (CollinearityChecker)
-相关性分析模块 (CorrelationAnalyzer)
-Bootstrap采样模块 (BootstrapSampler)
-K折交叉验证模块 (CrossValidator)
-变量选择模块 (VariableSelector)
-系数稳定性监控模块 (CoefficientStabilityMonitor)
-参数统计分析模块 (ParameterStatisticsCalculator)
-变量贡献评估模块 (VariableContributionEvaluator)
-残差分析模块 (ResidualAnalyzer)
-结果可视化模块 (ResultVisualizer)
-结果保存模块 (ResultSaver)
-报告生成模块 (ReportGenerator)
-主执行函数 (Binomial)
-
-
-
-
-你在提供
-ParameterStatisticsCalculator
-ResultVisualizer
-ResultSaver
-ReportGenerator
-以上代码时出现错误，请修正后再给我
-
-
-
-
-
-
-
-Parse error at END: usage might be invalid MATLAB syntax.
-Line 20 /Users/L.P.Princess/Documents/MATLAB/Binomial_40/ReportGenerator.m                 else
-Line 22 /Users/L.P.Princess/Documents/MATLAB/Binomial_40/ReportGenerator.m                 end
-Line 57 /Users/L.P.Princess/Documents/MATLAB/Binomial_40/ReportGenerator.m             catch ME
-Line 61 /Users/L.P.Princess/Documents/MATLAB/Binomial_40/ReportGenerator.m             end
-
-
-
-
-
-
-BootstrapSampler
-The PARFOR loop cannot run due to the way variable 'sample_stats' is used.
-Line 178 /Users/L.P.Princess/Documents/MATLAB/Binomial_40/BootstrapSampler.m             parfor i = 1:n_samples
-Valid indices for 'sample_stats' are restricted in PARFOR loops.
-Line 190 /Users/L.P.Princess/Documents/MATLAB/Binomial_40/BootstrapSampler.m                 sample_stats.train_sizes(i) = length(train_idx);
-
-
-
-
-ResultSaver
-An END might be missing (after line 442), possibly matching FOR.
-Line 439 /Users/L.P.Princess/Documents/MATLAB/Binomial_40/ResultSaver.m                             for row = 1:size(value, 1)
-
-
-
-
-
-
 
 
 

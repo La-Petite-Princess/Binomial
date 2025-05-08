@@ -264,16 +264,91 @@ classdef ParallelManager < handle
                 % 配置存储位置
                 obj.ClusterProfile.JobStorageLocation = obj.Config.ParallelClusterJobStorageLocation;
                 
-                % 优化并行池设置
-                obj.ClusterProfile.AdditionalProperties.ClusterMatlabRoot = matlabroot;
-                obj.ClusterProfile.AdditionalProperties.UseUniqueSubfolders = true;
+                % 这里是修改的部分：移除了AdditionalProperties相关代码
+                % 尝试使用属性存在检查并适配不同版本的MATLAB
+                try
+                    % 检查是否有AdditionalProperties属性
+                    if isprop(obj.ClusterProfile, 'AdditionalProperties') 
+                        % 如果有AdditionalProperties属性，则使用它
+                        obj.ClusterProfile.AdditionalProperties.ClusterMatlabRoot = matlabroot;
+                        obj.ClusterProfile.AdditionalProperties.UseUniqueSubfolders = true;
+                        obj.Logger.Log('info', '使用AdditionalProperties配置并行池');
+                    else
+                        % 如果没有AdditionalProperties属性，则跳过该设置
+                        obj.Logger.Log('info', '此MATLAB版本不支持AdditionalProperties，已跳过该配置');
+                        
+                        % 尝试使用其他可能存在的属性或方法来设置类似的配置
+                        if isprop(obj.ClusterProfile, 'ClusterMatlabRoot')
+                            obj.ClusterProfile.ClusterMatlabRoot = matlabroot;
+                        end
+                        
+                        % 对于UseUniqueSubfolders，可能需要检查是否有类似功能的替代属性
+                    end
+                catch prop_error
+                    % 如果检查或设置属性失败，记录错误但继续执行
+                    obj.Logger.Log('warning', sprintf('设置并行池高级属性时出错: %s', prop_error.message));
+                    obj.Logger.Log('info', '继续使用基本配置');
+                end
                 
                 % 保存配置
                 obj.ClusterProfile.saveProfile;
                 
-                % 创建并行池
-                obj.ParallelPool = parpool(obj.ClusterProfile, obj.PoolSize);
+                % 修改：处理NumWorkers参数问题
+                % 检测MATLAB版本来适配不同的parpool调用方式
+                try
+                    % 获取MATLAB版本信息
+                    versionInfo = ver('MATLAB');
+                    matlabVersion = str2double(regexp(versionInfo.Version, '\d+\.\d+', 'match', 'once'));
+                    
+                    % 检查是否是新版本（R2024a或以上）
+                    isNewVersion = matlabVersion >= 9.16; % R2024a是9.16版本
+                    
+                    if isNewVersion
+                        obj.Logger.Log('info', sprintf('检测到MATLAB版本 %.2f，使用新的parpool参数格式', matlabVersion));
+                        
+                        % 在新版本中，使用选项方式指定NumWorkers
+                        options = struct();
+                        % 这里设置NumWorkers为固定值范围[PoolSize, PoolSize]
+                        options.NumWorkers = [obj.PoolSize, obj.PoolSize];
+                        
+                        % 创建并行池
+                        obj.ParallelPool = parpool(obj.ClusterProfile, options);
+                    else
+                        % 对于旧版本，使用原始调用方式
+                        obj.Logger.Log('info', sprintf('检测到MATLAB版本 %.2f，使用传统parpool参数格式', matlabVersion));
+                        obj.ParallelPool = parpool(obj.ClusterProfile, obj.PoolSize);
+                    end
+                catch version_error
+                    % 如果版本检测失败，尝试使用兼容性最强的方式
+                    obj.Logger.Log('warning', sprintf('版本检测失败: %s，尝试备用方式', version_error.message));
+                    
+                    % 尝试方式1：使用选项结构体
+                    try
+                        options = struct('NumWorkers', [obj.PoolSize, obj.PoolSize]);
+                        obj.ParallelPool = parpool(obj.ClusterProfile, options);
+                        obj.Logger.Log('info', '使用选项结构体成功创建并行池');
+                    catch option_error
+                        % 尝试方式2：不指定PoolSize，使用默认值
+                        try
+                            obj.Logger.Log('warning', sprintf('选项结构体方式失败: %s，尝试使用默认值', option_error.message));
+                            obj.ParallelPool = parpool(obj.ClusterProfile);
+                            obj.Logger.Log('info', '使用默认值成功创建并行池');
+                            
+                            % 更新PoolSize为实际值
+                            obj.PoolSize = obj.ParallelPool.NumWorkers;
+                        catch default_error
+                            % 尝试方式3：直接使用'Processes'配置文件
+                            obj.Logger.Log('warning', sprintf('默认值方式失败: %s，尝试使用基本配置', default_error.message));
+                            obj.ParallelPool = parpool('Processes');
+                            obj.Logger.Log('info', '使用基本配置成功创建并行池');
+                            
+                            % 更新PoolSize为实际值
+                            obj.PoolSize = obj.ParallelPool.NumWorkers;
+                        end
+                    end
+                end
                 
+                % 记录创建结果
                 obj.Logger.Log('info', sprintf('创建并行池成功: %d workers x %d threads', ...
                     obj.PoolSize, obj.ThreadsPerWorker));
                 

@@ -738,7 +738,7 @@ caxis([-1, 1]);
 colorbar;
 
 % 保存矢量图
-save_vector_graphic(fig, 'results', 'variable_correlation');
+save_figure(fig, 'results', 'variable_correlation', 'Formats', {'svg'});
 close(fig);
 
 % 识别高度相关的变量对
@@ -822,7 +822,7 @@ if length(var_names) > 3
         title('变量对前5个主成分的贡献(绝对值)');
         
         % 保存PCA图
-        save_vector_graphic(fig2, 'results', 'pca_analysis');
+        save_figure(fig2, 'results', 'pca_analysis', 'Formats', {'svg'});
         close(fig2);
         
         % 创建主成分累计方差表
@@ -871,7 +871,7 @@ if length(var_names) > 3
         ylim([0, 100]);
         
         % 保存图形
-        save_vector_graphic(fig3, 'results', 'cumulative_variance');
+        save_figure(fig3, 'results', 'cumulative_variance', 'Formats', {'svg'});
         close(fig3);
         
         % 创建主成分载荷可视化
@@ -890,7 +890,7 @@ if length(var_names) > 3
         end
         
         % 保存图形
-        save_vector_graphic(fig4, 'results', 'principal_component_loadings');
+        save_figure(fig4, 'results', 'principal_component_loadings', 'Formats', {'svg'});
         close(fig4);
     catch ME
         log_message('warning', sprintf('PCA可视化失败: %s', ME.message));
@@ -1287,11 +1287,7 @@ sgtitle(sprintf('K折交叉验证分析 (K=%d)', k), 'FontSize', 16, 'FontWeight
 set(gcf, 'Color', 'white');
 
 % 保存为图像
-try
-    save_vector_graphic(fig, 'results', 'kfold_visualization');
-catch
-    saveas(fig, fullfile('results', 'kfold_visualization.png'));
-end
+    save_figure(fig, 'results', 'kfold_visualization', 'Formats', {'svg'});
 close(fig);
 end
 
@@ -1835,7 +1831,7 @@ for i = 1:length(methods)
                 sgtitle(sprintf('%s方法的残差分析', method), 'FontSize', 14, 'FontWeight', 'bold');
                 
                 % 保存图形
-                save_vector_graphic(fig, figure_dir, sprintf('%s_residual_analysis', method));
+                save_figure(fig, figure_dir, sprintf('%s_residual_analysis', method), 'Formats', {'svg'});
                 close(fig);
                 
                 % 创建残差汇总统计表
@@ -1950,7 +1946,7 @@ try
         plot(xlim, [0 0], 'k--');
         
         % 保存图形
-        save_vector_graphic(fig1, figure_dir, 'pearson_residuals_comparison');
+        save_figure(fig1, figure_dir, 'pearson_residuals_comparison', 'Formats', {'svg'});
         close(fig1);
         
         % 创建残差比较图 - Deviance残差 (新增)
@@ -1970,7 +1966,7 @@ try
         plot(xlim, [0 0], 'k--');
         
         % 保存图形
-        save_vector_graphic(fig2, figure_dir, 'deviance_residuals_comparison');
+        save_figure(fig2, figure_dir, 'deviance_residuals_comparison', 'Formats', {'svg'});
         close(fig2);
     end
 catch ME
@@ -3383,7 +3379,7 @@ sgtitle(sprintf('K折交叉验证各折性能指标 (K=%d)', k), 'FontSize', 16,
 set(gcf, 'Color', 'white');
 
 % 保存图形
-save_vector_graphic(fig, figure_dir, 'kfold_performance_by_fold');
+save_figure(fig, figure_dir, 'kfold_performance_by_fold', 'Formats', {'svg'});
 close(fig);
 end
 
@@ -3616,7 +3612,7 @@ sgtitle('K折交叉验证性能分析', 'FontSize', 16, 'FontWeight', 'bold');
 set(gcf, 'Color', 'white');
 
 % 保存矢量图
-save_vector_graphic(fig, figure_dir, 'cv_performance');
+save_figure(fig, figure_dir, 'cv_performance', 'Formats', {'svg'});
 
 % 关闭图形
 close(fig);
@@ -3747,7 +3743,7 @@ try
         set(gcf, 'Color', 'white');
                 
         % 保存矢量图
-        save_vector_graphic(fig, figure_dir, 'coefficient_stability_comparison');
+        save_figure(fig, figure_dir, 'coefficient_stability_comparison', 'Formats', {'svg'});
         
         % 关闭图形
         close(fig);
@@ -3802,7 +3798,7 @@ if isfield(var_contribution, 'overall_importance')
         set(gcf, 'Color', 'white');
         
         % 保存矢量图
-        save_vector_graphic(fig, figure_dir, 'overall_variable_importance');
+        save_figure(fig, figure_dir, 'overall_variable_importance', 'Formats', {'svg'});
         
         % 关闭图形
         close(fig);
@@ -3857,7 +3853,7 @@ if isfield(var_contribution, 'correlation')
         set(gcf, 'Color', 'white');
                 
         % 保存矢量图
-        save_vector_graphic(fig, figure_dir, 'correlation_analysis');
+        save_figure(fig, figure_dir, 'correlation_analysis', 'Formats', {'svg'});
 
         % 关闭图形
         close(fig);
@@ -3951,7 +3947,7 @@ if isfield(var_contribution, 'methods')
                 set(gcf, 'Color', 'white');
                                 
                 % 保存矢量图
-                save_vector_graphic(fig, figure_dir, [method, '_variable_contribution']);
+                save_figure(fig, figure_dir, [method, '_variable_contribution'], 'Formats', {'svg'});
                 
                 % 关闭图形
                 close(fig);
@@ -4073,7 +4069,7 @@ function create_boxplot_visualization(results, methods, figure_dir)
         ylim([ylim_current(1), ylim_current(2) + 0.1]);
         
         % 保存图形
-        save_vector_graphic(fig, figure_dir, sprintf('boxplot_%s', lower(metric)));
+        save_figure(fig, figure_dir, sprintf('boxplot_%s', lower(metric)), 'Formats', {'svg'});
         close(fig);
     end
 end
@@ -4211,7 +4207,7 @@ set(gca, 'FontSize', 11);
 box on;
 
 % 保存图形
-save_vector_graphic(fig, figure_dir, 'precision_recall_curves');
+save_figure(fig, figure_dir, 'precision_recall_curves', 'Formats', {'svg'});
 close(fig);
 end
 
@@ -4357,7 +4353,7 @@ set(gca, 'FontSize', 11);
 box on;
 
 % 保存图形
-save_vector_graphic(fig, figure_dir, 'calibration_curves');
+save_figure(fig, figure_dir, 'calibration_curves', 'Formats', {'svg'});
 close(fig);
 end
 
@@ -4504,7 +4500,7 @@ function create_confusion_matrices(results, methods, figure_dir)
             'FontSize', 14, 'FontWeight', 'bold');
         
         % 保存图形
-        save_vector_graphic(fig, figure_dir, sprintf('%s_confusion_matrix', method));
+        save_figure(fig, figure_dir, sprintf('%s_confusion_matrix', method), 'Formats', {'svg'});
         close(fig);
     end
 
@@ -4607,7 +4603,7 @@ function create_confusion_matrices(results, methods, figure_dir)
         sgtitle('各方法混淆矩阵比较 (归一化)', 'FontSize', 14, 'FontWeight', 'bold');
         
         % 保存图形
-        save_vector_graphic(fig, figure_dir, 'confusion_matrix_comparison');
+        save_figure(fig, figure_dir, 'confusion_matrix_comparison', 'Formats', {'svg'});
         close(fig);
     catch ME
         log_message('warning', sprintf('创建混淆矩阵比较图失败: %s', ME.message));
@@ -4827,7 +4823,7 @@ function create_variable_group_plot(results, methods, var_names, figure_dir)
             set(fig1, 'Position', [100, 100, 1200, 800]);
             
             % 保存矢量图 - 注意这里传入方法名
-            save_figure(fig1, figure_dir, '%s_variable_combinations', method, 'Formats', {svg'});
+            save_figure(fig1, figure_dir, '%s_variable_combinations', 'MethodName', method, 'Formats', {'svg'});
             close(fig1);
             
             % 创建组合详情图
@@ -5080,7 +5076,7 @@ function save_vector_graphic(fig, output_dir, filename_base)
 %   filename_base - 基本文件名
 
     % 调用统一的保存函数，指定矢量格式
-    save_figure(fig, output_dir, filename_base, 'Formats', {svg'}, 'LogLevel', 'Info');
+    save_figure(fig, output_dir, filename_base, 'Formats', {'svg'});
 end
 
 %% 创建增强综合报告 - 新增

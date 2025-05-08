@@ -36,40 +36,31 @@ https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/CrossValidato
 https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/VariableSelector.m
 
 第十二部分
+https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/CoefficientStabilityMonitor.m
 
 第十三部分
+https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/ParameterStatisticsCalculator.m
 
 第十四部分
+https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/VariableContributionEvaluator.m
 
 第十五部分
+https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/ResidualAnalyzer.m
 
 第十六部分
+https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/ResultVisualizer.m
 
 第十七部分
+https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/ResultSaver.m
 
 第十八部分
+https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/ReportGenerator.m
 
 第十九部分
+https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/Binomial.m
 
 第二十部分
-
-
-
-
-
-
-
-
-
-https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/.m
-https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/.m
-https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/.m
-https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/.m
-https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/.m
-https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/.m
-https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/.m
-https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/.m
-https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/.m
+https://github.com/La-Petite-Princess/Binomial/raw/refs/heads/main/README.md
 
 
 

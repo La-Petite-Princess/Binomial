@@ -388,7 +388,7 @@ classdef VariableSelector < handle
                     
                     if exist('TreeBagger', 'file')
                         % 创建随机森林
-                        rf = TreeBagger(config.RandomForestNumTrees, X_train, y_train, ...
+                        rf_model = TreeBagger(config.RandomForestNumTrees, X_train, y_train, ...
                             'Method', 'classification', ...
                             'OOBPrediction', 'on', ...
                             'OOBPredictorImportance', 'on', ...
@@ -400,33 +400,36 @@ classdef VariableSelector < handle
                             'Surrogate', 'off');
                         
                         % 获取特征重要性
-                        importance = rf.OOBPermutedPredictorDeltaError;
+                        importance = rf_model.OOBPermutedPredictorDeltaError;
                         
                         % 选择重要变量
                         var_combinations{i} = find(importance > mean(importance));
                         
-                        % 清理对象
-                        clear rf;
+                        % 移除clear语句，让变量自然地在迭代结束时被清理
+                        % 不使用 clear rf; 
                     else
                         % 备选方法：相关性选择
                         [~, pval] = corr(X_train, y_train);
                         var_combinations{i} = find(pval < 0.05);
                     end
                     
+                    % 确保至少有一个变量
+                    if isempty(var_combinations{i})
+                        [~, idx] = sort(abs(corr(X_train, y_train)), 'descend');
+                        var_combinations{i} = idx(1:min(3, length(idx)));
+                    end
                 catch
                     % 失败时的备选方法
                     X_train = X(train_indices{i}, :);
                     y_train = y(train_indices{i});
                     [~, pval] = corr(X_train, y_train);
                     var_combinations{i} = find(pval < 0.05);
-                end
-                
-                % 确保至少有一个变量
-                if isempty(var_combinations{i})
-                    X_train = X(train_indices{i}, :);
-                    y_train = y(train_indices{i});
-                    [~, idx] = sort(abs(corr(X_train, y_train)), 'descend');
-                    var_combinations{i} = idx(1:min(3, length(idx)));
+                    
+                    % 确保至少有一个变量
+                    if isempty(var_combinations{i})
+                        [~, idx] = sort(abs(corr(X_train, y_train)), 'descend');
+                        var_combinations{i} = idx(1:min(3, length(idx)));
+                    end
                 end
             end
         end
@@ -489,17 +492,14 @@ classdef VariableSelector < handle
             models = cell(n_samples, 1);
             metrics_names = {'accuracy', 'sensitivity', 'specificity', 'precision', 'f1_score', 'auc', 'aic', 'bic'};
             
-            % 初始化性能结构
-            performance = struct();
-            for metric = metrics_names
-                performance.(metric{1}) = zeros(n_samples, 1);
-            end
-            
             % 预测结果存储
             y_pred_all = cell(n_samples, 1);
             y_test_all = cell(n_samples, 1);
             y_pred_prob_all = cell(n_samples, 1);
             all_coefs = cell(n_samples, 1);
+            
+            % 创建临时数组来存储性能指标，而不是直接修改结构体
+            temp_metrics = zeros(n_samples, length(metrics_names));
             
             % 组合性能初始化
             perf_template = struct(...
@@ -537,9 +537,12 @@ classdef VariableSelector < handle
                         [metrics, coefs] = obj.EvaluateModel(y(test_idx), y_pred, y_pred_prob, local_mdl, method, ...
                             X_selected(train_idx, :), y(train_idx));
                         
-                        % 存储结果
-                        for metric = metrics_names
-                            performance.(metric{1})(i) = metrics.(metric{1});
+                        % 存储结果到临时数组，而不是直接修改性能结构体
+                        for j = 1:length(metrics_names)
+                            metric = metrics_names{j};
+                            if isfield(metrics, metric)
+                                temp_metrics(i, j) = metrics.(metric);
+                            end
                         end
                         
                         y_pred_all{i} = y_pred;
@@ -570,6 +573,13 @@ classdef VariableSelector < handle
             
             % 处理组合性能
             group_performance = obj.ProcessGroupPerformance(combo_keys, perf_structs);
+            
+            % 将临时数组转换回结构体
+            performance = struct();
+            for j = 1:length(metrics_names)
+                metric = metrics_names{j};
+                performance.(metric) = temp_metrics(:, j);
+            end
             
             % 处理总体性能
             performance = obj.ProcessOverallPerformance(performance, y_pred_all, y_test_all, y_pred_prob_all, all_coefs);

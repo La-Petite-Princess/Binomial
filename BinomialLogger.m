@@ -1,334 +1,359 @@
 classdef BinomialLogger < handle
-    % 日志管理类：负责所有日志记录功能
-    % 支持多种日志级别、文件和控制台输出
-    
-    properties (Access = private)
-        LogFile
-        LogLevel
-        FigureSaveLevel
-        Console
-        LogBuffer
-        BufferSize
-    end
+    % BinomialLogger - 日志记录系统
+    %
+    % 该类提供了统一的日志记录功能，支持不同级别的日志输出，
+    % 可以将日志内容输出到控制台和文件，方便调试和追踪。
+    %
+    % 可用的日志级别包括:
+    %   DEBUG   - 详细的调试信息
+    %   INFO    - 一般的信息性消息
+    %   WARN    - 警告信息
+    %   ERROR   - 错误信息
+    %
+    % 示例:
+    %   logger = BinomialLogger.getLogger('ModuleName');
+    %   logger.info('这是一条信息');
+    %   logger.error('发生错误: %s', '错误详情');
     
     properties (Constant)
-        LEVELS = struct(...
-            'debug', 0, ...
-            'info', 1, ...
-            'warning', 2, ...
-            'error', 3 ...
-        )
-        
-        LEVEL_NAMES = {'DEBUG', 'INFO', 'WARNING', 'ERROR'}
-        
-        % ANSI颜色代码
-        COLORS = struct(...
-            'debug', '\033[0;34m', ...  % 蓝色
-            'info', '\033[0;32m', ...   % 绿色
-            'warning', '\033[1;33m', ...% 黄色
-            'error', '\033[1;31m', ...  % 红色
-            'reset', '\033[0m' ...      % 重置
-        )
+        % 日志级别常量
+        LEVEL_DEBUG = 1;
+        LEVEL_INFO = 2;
+        LEVEL_WARN = 3;
+        LEVEL_ERROR = 4;
     end
     
-    methods (Access = public)
-        function obj = BinomialLogger(log_file, log_level, figure_save_level)
-            % 构造函数
-            % 输入:
-            %   log_file - 日志文件路径
-            %   log_level - 日志级别 ('debug', 'info', 'warning', 'error')
-            %   figure_save_level - 图形保存日志级别（可选）
+    properties
+        name            % 日志记录器名称
+        level           % 日志级别
+        fileHandlers    % 文件处理器列表
+        useConsole      % 是否输出到控制台
+        useTimestamp    % 是否显示时间戳
+        useLoggerName   % 是否显示记录器名称
+        dateFormat      % 日期格式
+    end
+    
+    properties (Access = private, Constant)
+        % 单例实例映射表
+        instances = containers.Map();
+        
+        % 级别名称映射
+        levelNames = {'DEBUG', 'INFO', 'WARN', 'ERROR'};
+        
+        % 级别颜色映射
+        levelColors = {
+            [0, 0.5, 0]     % DEBUG - 绿色
+            [0, 0, 1]       % INFO - 蓝色
+            [1, 0.5, 0]     % WARN - 橙色
+            [1, 0, 0]       % ERROR - 红色
+        };
+    end
+    
+    methods
+        function obj = BinomialLogger(name)
+            % 构造函数，创建一个日志记录器实例
+            %
+            % 参数:
+            %   name - 日志记录器名称
             
-            if nargin < 2
-                log_level = 'info';
+            obj.name = name;
+            obj.level = obj.LEVEL_INFO;  % 默认级别为INFO
+            obj.fileHandlers = {};
+            obj.useConsole = true;       % 默认输出到控制台
+            obj.useTimestamp = true;     % 默认显示时间戳
+            obj.useLoggerName = true;    % 默认显示记录器名称
+            obj.dateFormat = 'yyyy-mm-dd HH:MM:SS.FFF';  % 默认日期格式
+        end
+        
+        function setLevel(obj, levelName)
+            % 设置日志级别
+            %
+            % 参数:
+            %   levelName - 级别名称 {'DEBUG', 'INFO', 'WARN', 'ERROR'}
+            
+            switch upper(levelName)
+                case 'DEBUG'
+                    obj.level = obj.LEVEL_DEBUG;
+                case 'INFO'
+                    obj.level = obj.LEVEL_INFO;
+                case 'WARN'
+                    obj.level = obj.LEVEL_WARN;
+                case 'ERROR'
+                    obj.level = obj.LEVEL_ERROR;
+                otherwise
+                    warning('无效的日志级别: %s，使用默认级别 INFO', levelName);
+                    obj.level = obj.LEVEL_INFO;
             end
+        end
+        
+        function addFileHandler(obj, filename, append)
+            % 添加文件处理器
+            %
+            % 参数:
+            %   filename - 日志文件路径
+            %   append - 是否追加模式 (true/false, 默认为true)
             
             if nargin < 3
-                % 图形保存日志级别比一般日志级别高一级
-                switch lower(log_level)
-                    case 'debug'
-                        figure_save_level = 'info';
-                    case 'info'
-                        figure_save_level = 'warning';
-                    otherwise
-                        figure_save_level = log_level;
+                append = true;
+            end
+            
+            % 检查文件路径
+            [folder, ~, ~] = fileparts(filename);
+            if ~isempty(folder) && ~exist(folder, 'dir')
+                try
+                    mkdir(folder);
+                catch ME
+                    warning('无法创建日志目录: %s, %s', folder, ME.message);
+                    return;
                 end
             end
             
-            obj.LogFile = log_file;
-            obj.LogLevel = lower(log_level);
-            obj.FigureSaveLevel = lower(figure_save_level);
-            obj.Console = true;
-            obj.BufferSize = 100;
-            obj.LogBuffer = cell(obj.BufferSize, 1);
+            % 创建文件处理器
+            handler = struct('filename', filename, 'append', append);
             
-            % 初始化日志文件
-            obj.InitializeLogFile();
+            % 添加到处理器列表
+            obj.fileHandlers{end+1} = handler;
             
-            % 记录启动信息
-            obj.Log('info', '=== 日志系统初始化 ===');
-            obj.Log('info', sprintf('日志级别: %s (图形保存级别: %s)', ...
-                upper(obj.LogLevel), upper(obj.FigureSaveLevel)));
+            % 写入日志文件头
+            try
+                if append && exist(filename, 'file')
+                    fid = fopen(filename, 'a');
+                else
+                    fid = fopen(filename, 'w');
+                    fprintf(fid, '# 日志开始时间: %s\n', datestr(now, obj.dateFormat));
+                    fprintf(fid, '# 级别 | 时间戳 | 记录器 | 消息\n');
+                    fprintf(fid, '# ----------------------------------------\n');
+                end
+                
+                if fid ~= -1
+                    fclose(fid);
+                end
+            catch ME
+                warning('%s', sprintf('初始化日志文件失败: %s', ME.message));
+            end
         end
         
-        function delete(obj)
-            % 析构函数：确保缓冲区内容写入文件
-            obj.FlushBuffer();
+        function removeFileHandler(obj, filename)
+            % 移除文件处理器
+            %
+            % 参数:
+            %   filename - 要移除的日志文件路径
+            
+            for i = length(obj.fileHandlers):-1:1
+                if strcmp(obj.fileHandlers{i}.filename, filename)
+                    obj.fileHandlers(i) = [];
+                    return;
+                end
+            end
         end
         
-        function Log(obj, level, message)
+        function setConsoleOutput(obj, useConsole)
+            % 设置是否输出到控制台
+            %
+            % 参数:
+            %   useConsole - 布尔值，true表示输出到控制台
+            
+            obj.useConsole = logical(useConsole);
+        end
+        
+        function setTimestampDisplay(obj, useTimestamp)
+            % 设置是否显示时间戳
+            %
+            % 参数:
+            %   useTimestamp - 布尔值，true表示显示时间戳
+            
+            obj.useTimestamp = logical(useTimestamp);
+        end
+        
+        function setLoggerNameDisplay(obj, useLoggerName)
+            % 设置是否显示记录器名称
+            %
+            % 参数:
+            %   useLoggerName - 布尔值，true表示显示记录器名称
+            
+            obj.useLoggerName = logical(useLoggerName);
+        end
+        
+        function setDateFormat(obj, format)
+            % 设置日期格式
+            %
+            % 参数:
+            %   format - 日期格式字符串
+            
+            try
+                % 测试格式是否有效
+                datestr(now, format);
+                obj.dateFormat = format;
+            catch
+                warning('无效的日期格式: %s，保持原有格式', format);
+            end
+        end
+        
+        function debug(obj, message, varargin)
+            % 记录DEBUG级别日志
+            %
+            % 参数:
+            %   message - 日志消息，可包含格式说明符
+            %   varargin - 格式说明符对应的值
+            
+            obj.log(obj.LEVEL_DEBUG, message, varargin{:});
+        end
+        
+        function info(obj, message, varargin)
+            % 记录INFO级别日志
+            %
+            % 参数:
+            %   message - 日志消息，可包含格式说明符
+            %   varargin - 格式说明符对应的值
+            
+            obj.log(obj.LEVEL_INFO, message, varargin{:});
+        end
+        
+        function warn(obj, message, varargin)
+            % 记录WARN级别日志
+            %
+            % 参数:
+            %   message - 日志消息，可包含格式说明符
+            %   varargin - 格式说明符对应的值
+            
+            obj.log(obj.LEVEL_WARN, message, varargin{:});
+        end
+        
+        function error(obj, message, varargin)
+            % 记录ERROR级别日志
+            %
+            % 参数:
+            %   message - 日志消息，可包含格式说明符
+            %   varargin - 格式说明符对应的值
+            
+            obj.log(obj.LEVEL_ERROR, message, varargin{:});
+        end
+    end
+    
+    methods (Access = protected)
+        function log(obj, level, message, varargin)
             % 记录日志
-            % 输入:
+            %
+            % 参数:
             %   level - 日志级别
-            %   message - 日志信息
+            %   message - 日志消息，可包含格式说明符
+            %   varargin - 格式说明符对应的值
             
-            level = lower(level);
-            
-            % 检查是否应记录此级别的日志
-            if ~obj.ShouldLog(level)
+            % 检查日志级别
+            if level < obj.level
                 return;
             end
             
-            % 生成时间戳
-            timestamp = datestr(now, 'yyyy-mm-dd HH:MM:SS.FFF');
-            
-            % 获取调用函数信息
-            stack = dbstack('-completenames');
-            if length(stack) > 1
-                % 跳过当前函数，获取调用者信息
-                caller = stack(2);
-                [~, caller_func, ~] = fileparts(caller.name);
-                caller_info = sprintf('%s:%d', caller_func, caller.line);
-            else
-                caller_info = 'unknown';
-            end
-            
-            % 格式化日志消息
-            level_name = upper(level);
-            formatted_message = sprintf('[%s] [%s] [%s] %s', ...
-                timestamp, level_name, caller_info, message);
-            
-            % 输出到控制台（带颜色）
-            if obj.Console && obj.ShouldOutputToConsole(level)
-                if ispc
-                    % Windows系统不支持ANSI颜色
-                    fprintf('%s\n', formatted_message);
+            % 格式化消息
+            try
+                if ~isempty(varargin)
+                    formattedMessage = sprintf(message, varargin{:});
                 else
-                    % Unix系统支持ANSI颜色
-                    color = obj.COLORS.(level);
-                    reset = obj.COLORS.reset;
-                    fprintf('%s%s%s\n', color, formatted_message, reset);
+                    formattedMessage = message;
+                end
+            catch
+                formattedMessage = sprintf('格式化日志消息失败: %s', message);
+            end
+            
+            % 获取当前时间
+            timestamp = datestr(now, obj.dateFormat);
+            
+            % 获取级别名称
+            levelName = obj.levelNames{level};
+            
+            % 构建完整日志消息
+            logEntry = '';
+            
+            if obj.useTimestamp
+                logEntry = sprintf('[%s] ', timestamp);
+            end
+            
+            logEntry = sprintf('%s[%s] ', logEntry, levelName);
+            
+            if obj.useLoggerName
+                logEntry = sprintf('%s[%s] ', logEntry, obj.name);
+            end
+            
+            logEntry = [logEntry, formattedMessage];
+            
+            % 输出到控制台
+            if obj.useConsole
+                switch level
+                    case obj.LEVEL_DEBUG
+                        fprintf('<strong>%s</strong>\n', logEntry);
+                    case {obj.LEVEL_INFO, obj.LEVEL_WARN, obj.LEVEL_ERROR}
+                        fprintf('<strong><font color="%s">%s</font></strong>\n', ...
+                            rgb2hex(obj.levelColors{level}), logEntry);
                 end
             end
             
-            % 添加到缓冲区
-            obj.AddToBuffer(formatted_message);
-        end
-        
-        function LogPerformance(obj, operation, duration, additional_info)
-            % 记录性能信息
-            % 输入:
-            %   operation - 操作名称
-            %   duration - 持续时间（秒）
-            %   additional_info - 额外信息（可选）
-            
-            if nargin < 4
-                additional_info = '';
-            end
-            
-            if ~isempty(additional_info)
-                message = sprintf('性能: %s 完成，耗时: %.2f秒 (%s)', ...
-                    operation, duration, additional_info);
-            else
-                message = sprintf('性能: %s 完成，耗时: %.2f秒', ...
-                    operation, duration);
-            end
-            
-            obj.Log('info', message);
-        end
-        
-        function LogMemoryUsage(obj)
-            % 记录内存使用情况
-            if ispc
-                % Windows系统
-                [~, sys_mem] = memory();
-                total_mem = sys_mem.TotalPhys / (1024^3);  % GB
-                used_mem = (sys_mem.TotalPhys - sys_mem.AvailPhys) / (1024^3);  % GB
-                free_mem = sys_mem.AvailPhys / (1024^3);  % GB
+            % 写入日志文件
+            for i = 1:length(obj.fileHandlers)
+                handler = obj.fileHandlers{i};
                 
-                obj.Log('debug', sprintf('内存使用: 总计%.2fGB, 已用%.2fGB, 可用%.2fGB', ...
-                    total_mem, used_mem, free_mem));
-            else
-                % Unix系统
-                feature('memstats');  % 可能需要root权限
-            end
-        end
-        
-        function LogProgress(obj, current, total, description)
-            % 记录进度信息（进度条式）
-            % 输入:
-            %   current - 当前进度
-            %   total - 总进度
-            %   description - 描述信息
-            
-            percentage = current / total * 100;
-            progress_bar_width = 50;
-            filled_width = round(progress_bar_width * current / total);
-            bar = ['[' repmat('=', filled_width, 1) repmat(' ', progress_bar_width - filled_width, 1) ']'];
-            
-            message = sprintf('%s %s %.1f%% (%d/%d)', description, bar, percentage, current, total);
-            
-            % 使用回车符实现覆盖输出（仅适用于console）
-            if obj.Console
-                fprintf('\r%s', message);
-                if current == total
-                    fprintf('\n'); % 完成时换行
-                end
-            end
-            
-            % 只在特定进度点记录到文件
-            if mod(current, max(1, round(total / 10))) == 0 || current == total
-                obj.Log('debug', message);
-            end
-        end
-        
-        function LogException(obj, exception, context)
-            % 记录异常信息
-            % 输入:
-            %   exception - MException对象
-            %   context - 上下文信息
-            
-            obj.Log('error', sprintf('异常发生在 %s: %s', context, exception.message));
-            
-            % 记录堆栈跟踪
-            for i = 1:length(exception.stack)
-                frame = exception.stack(i);
-                obj.Log('error', sprintf('  在 %s (行 %d): %s', ...
-                    frame.name, frame.line, frame.file));
-            end
-            
-            % 如果有cause，也记录它
-            if ~isempty(exception.cause)
-                obj.Log('error', '原因:');
-                for i = 1:length(exception.cause)
-                    obj.LogException(exception.cause{i}, '嵌套异常');
-                end
-            end
-        end
-        
-        function SetLogLevel(obj, level)
-            % 设置日志级别
-            obj.LogLevel = lower(level);
-            obj.Log('info', sprintf('日志级别已更改为: %s', upper(level)));
-        end
-        
-        function SetFigureSaveLevel(obj, level)
-            % 设置图形保存日志级别
-            obj.FigureSaveLevel = lower(level);
-            obj.Log('info', sprintf('图形保存日志级别已更改为: %s', upper(level)));
-        end
-        
-        function CreateSection(obj, title)
-            % 创建日志分节
-            separator = repmat('=', 1, 60);
-            obj.Log('info', separator);
-            obj.Log('info', sprintf(' %s ', title));
-            obj.Log('info', separator);
-        end
-        
-        function Summary = GetSummary(obj)
-            % 获取日志摘要
-            Summary = struct();
-            Summary.LogFile = obj.LogFile;
-            Summary.LogLevel = obj.LogLevel;
-            Summary.FigureSaveLevel = obj.FigureSaveLevel;
-            
-            % 统计不同级别的日志数量
-            if exist(obj.LogFile, 'file')
-                fid = fopen(obj.LogFile, 'r');
-                if fid ~= -1
-                    log_content = fread(fid, '*char')';
-                    fclose(fid);
+                try
+                    if handler.append && exist(handler.filename, 'file')
+                        fid = fopen(handler.filename, 'a');
+                    else
+                        fid = fopen(handler.filename, 'w');
+                    end
                     
-                    % 计算各级别出现次数
-                    for i = 1:length(obj.LEVEL_NAMES)
-                        level_name = obj.LEVEL_NAMES{i};
-                        count = length(regexp(log_content, ['\[' level_name '\]']));
-                        Summary.(sprintf('%sCount', level_name)) = count;
+                    if fid ~= -1
+                        fprintf(fid, '%s | %s | %s | %s\n', ...
+                            levelName, timestamp, obj.name, formattedMessage);
+                        fclose(fid);
+                    else
+                        if obj.useConsole
+                            warning('%s', sprintf('无法打开日志文件: %s', handler.filename));
+                        end
+                    end
+                catch ME
+                    if obj.useConsole
+                        warning('%s', sprintf('写入日志文件失败: %s', ME.message));
                     end
                 end
             end
         end
     end
     
-    methods (Access = private)
-        function InitializeLogFile(obj)
-            % 初始化日志文件
-            [dir_path, ~, ~] = fileparts(obj.LogFile);
-            if ~exist(dir_path, 'dir')
-                mkdir(dir_path);
+    methods (Static)
+        function logger = getLogger(name)
+            % 获取日志记录器实例
+            %
+            % 参数:
+            %   name - 日志记录器名称
+            %
+            % 返回值:
+            %   logger - BinomialLogger实例
+            
+            persistent instances;
+            
+            if isempty(instances)
+                instances = containers.Map();
             end
             
-            % 如果文件已存在，备份旧文件
-            if exist(obj.LogFile, 'file')
-                timestamp = datestr(now, 'yyyymmdd_HHMMSS');
-                [dir_path, name, ext] = fileparts(obj.LogFile);
-                backup_file = fullfile(dir_path, sprintf('%s_%s%s', name, timestamp, ext));
-                copyfile(obj.LogFile, backup_file);
-            end
-            
-            % 创建新文件
-            fid = fopen(obj.LogFile, 'w');
-            if fid == -1
-                error('无法创建日志文件: %s', obj.LogFile);
-            end
-            fclose(fid);
-        end
-        
-        function should_log = ShouldLog(obj, level)
-            % 判断是否应记录此级别的日志
-            should_log = obj.LEVELS.(level) >= obj.LEVELS.(obj.LogLevel);
-        end
-        
-        function should_output = ShouldOutputToConsole(obj, level)
-            % 判断是否应输出到控制台
-            should_output = obj.Console && obj.ShouldLog(level);
-        end
-        
-        function AddToBuffer(obj, message)
-            % 添加消息到缓冲区
-            % 使用循环缓冲区
-            persistent buffer_index;
-            if isempty(buffer_index)
-                buffer_index = 1;
-            end
-            
-            obj.LogBuffer{buffer_index} = message;
-            buffer_index = mod(buffer_index, obj.BufferSize) + 1;
-            
-            % 定期刷新缓冲区
-            if buffer_index == 1
-                obj.FlushBuffer();
-            end
-        end
-        
-        function FlushBuffer(obj)
-            % 将缓冲区内容写入文件
-            try
-                fid = fopen(obj.LogFile, 'a');
-                if fid ~= -1
-                    for i = 1:obj.BufferSize
-                        if ~isempty(obj.LogBuffer{i})
-                            fprintf(fid, '%s\n', obj.LogBuffer{i});
-                        end
-                    end
-                    fclose(fid);
-                    % 清空缓冲区
-                    obj.LogBuffer = cell(obj.BufferSize, 1);
-                end
-            catch ME
-                warning('写入日志文件失败: %s', ME.message);
+            if ~isKey(instances, name)
+                logger = BinomialLogger(name);
+                instances(name) = logger;
+            else
+                logger = instances(name);
             end
         end
     end
+end
+
+function hex = rgb2hex(rgb)
+    % 将RGB颜色转换为十六进制颜色代码
+    %
+    % 参数:
+    %   rgb - RGB颜色向量 [r, g, b]，取值范围为[0, 1]
+    %
+    % 返回值:
+    %   hex - 十六进制颜色代码字符串
+    
+    r = round(rgb(1) * 255);
+    g = round(rgb(2) * 255);
+    b = round(rgb(3) * 255);
+    
+    hex = sprintf('#%02X%02X%02X', r, g, b);
 end

@@ -22,6 +22,29 @@ classdef BinomialConfig < handle
             [27, 28]                         % 组8
         }
         
+
+
+        Alpha = 0.05
+        Bootstrap = 0
+        CVFolds = 5
+        GenerateReport = false
+        GPU = false
+        Intercept = true
+        MethodVS = 'none'
+        ModelType = 'linear'
+        OutputDir = '.'
+        Parallel = false
+        PreProcess = 'standardize'
+        RandomSeed = 42
+        ReportFormat = 'html'
+        SaveFormat = 'mat'
+        SaveResults = false
+        TestSize = 0.2
+        Verbose = true
+
+
+
+
         % 多重共线性检查参数
         VifThreshold = 10
         ConditionNumberThreshold = 30
@@ -80,6 +103,21 @@ classdef BinomialConfig < handle
     end
     
     methods (Access = public)
+
+        function setParameter(obj, paramName, paramValue)
+            % 设置配置参数
+            %
+            % 参数:
+            %   paramName - 参数名称
+            %   paramValue - 参数值
+
+            if isprop(obj, paramName)
+                obj.(paramName) = paramValue;
+            else
+                warning('未知的配置参数: %s', paramName);
+            end
+        end
+
         function obj = BinomialConfig()
             % 构造函数：初始化配置
             

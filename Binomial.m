@@ -110,7 +110,11 @@ paramNames = fieldnames(params);
 for i = 1:length(paramNames)
     paramName = paramNames{i};
     if ~ismember(paramName, {'X', 'y', 'Config'}) && ~isempty(params.(paramName))
-        config.setParameter(paramName, params.(paramName));
+        if isprop(config, paramName)
+            config.(paramName) = params.(paramName);
+        else
+            warning('未知的配置参数: %s', paramName);
+        end
     end
 end
 
@@ -159,10 +163,10 @@ end
 % 初始化模块对象
 try
     % 数据管理模块
-    dataManager = DataManager(logger);
+    dataManager = DataManager(config, logger);
     
     % GPU管理模块
-    gpuManager = GPUManager(logger);
+    gpuManager = GPUManager(config, logger);
     if opts.GPU
         if gpuManager.isGPUAvailable()
             logger.info('GPU可用，将使用GPU加速计算');
@@ -173,7 +177,7 @@ try
     end
     
     % 并行计算管理模块
-    parallelManager = ParallelManager(logger);
+    parallelManager = ParallelManager(config, logger);
     if opts.Parallel
         if parallelManager.isParallelAvailable()
             if opts.NumWorkers > 0
@@ -209,7 +213,7 @@ try
     end
     
     % 多重共线性检查
-    colChecker = CollinearityChecker(logger);
+    colChecker = CollinearityChecker(config, logger);
     colChecker.check(dataManager.getX());
     
     % 获取预处理后的数据

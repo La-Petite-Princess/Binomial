@@ -228,6 +228,69 @@ classdef BinomialLogger < handle
             
             obj.log(obj.LEVEL_ERROR, message, varargin{:});
         end
+
+        function Log(obj, levelName, message, varargin)
+            % 通用日志记录方法
+            %
+            % 参数:
+            %   levelName - 日志级别名称 {'debug', 'info', 'warn', 'error'}
+            %   message - 日志消息
+            %   varargin - 附加参数
+            
+            switch lower(levelName)
+                case 'debug'
+                    obj.debug(message, varargin{:});
+                case 'info'
+                    obj.info(message, varargin{:});
+                case 'warn'
+                    obj.warn(message, varargin{:});
+                case 'error'
+                    obj.error(message, varargin{:});
+                otherwise
+                    obj.info(message, varargin{:});  % 默认使用info级别
+            end
+        end
+
+        function LogException(obj, exception, context)
+            % 记录异常信息
+            %
+            % 参数:
+            %   exception - 异常对象 (MException)
+            %   context - 异常发生的上下文 (可选)
+        
+            if nargin < 3
+                context = '';
+            else
+                context = [' in ' context];
+            end
+            
+            % 准备基本错误消息
+            errorMsg = sprintf('错误%s: %s', context, exception.message);
+            
+            % 记录基本错误
+            obj.error(errorMsg);
+            
+            % 记录堆栈信息
+            if ~isempty(exception.stack)
+                stackMsg = '堆栈跟踪:';
+                obj.error(stackMsg);
+                
+                for i = 1:length(exception.stack)
+                    frame = exception.stack(i);
+                    frameMsg = sprintf('  文件: %s, 行: %d, 函数: %s', ...
+                        frame.file, frame.line, frame.name);
+                    obj.error(frameMsg);
+                end
+            end
+            
+            % 记录内部异常(如果有)
+            if ~isempty(exception.cause)
+                obj.error('内部异常:');
+                for i = 1:length(exception.cause)
+                    obj.LogException(exception.cause{i}, '内部异常');
+                end
+            end
+        end
     end
     
     methods (Access = protected)

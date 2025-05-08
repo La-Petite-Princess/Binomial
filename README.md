@@ -121,3 +121,50 @@ ResultVisualizer
 ResultSaver
 ReportGenerator
 以上代码时出现错误，请修正后再给我
+
+
+
+
+
+
+
+Parse error at END: usage might be invalid MATLAB syntax.
+Line 20 /Users/L.P.Princess/Documents/MATLAB/Binomial_40/ReportGenerator.m                 else
+Line 22 /Users/L.P.Princess/Documents/MATLAB/Binomial_40/ReportGenerator.m                 end
+Line 57 /Users/L.P.Princess/Documents/MATLAB/Binomial_40/ReportGenerator.m             catch ME
+Line 61 /Users/L.P.Princess/Documents/MATLAB/Binomial_40/ReportGenerator.m             end
+
+
+
+
+
+
+BootstrapSampler
+The PARFOR loop cannot run due to the way variable 'sample_stats' is used.
+Line 178 /Users/L.P.Princess/Documents/MATLAB/Binomial_40/BootstrapSampler.m             parfor i = 1:n_samples
+Valid indices for 'sample_stats' are restricted in PARFOR loops.
+Line 190 /Users/L.P.Princess/Documents/MATLAB/Binomial_40/BootstrapSampler.m                 sample_stats.train_sizes(i) = length(train_idx);
+
+
+
+
+ResultSaver
+An END might be missing (after line 442), possibly matching FOR.
+Line 439 /Users/L.P.Princess/Documents/MATLAB/Binomial_40/ResultSaver.m                             for row = 1:size(value, 1)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

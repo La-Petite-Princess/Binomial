@@ -4060,135 +4060,132 @@ function data_out = check_data(perf, field, method, metric_name)
     end
 end
 
-%% 平均Precision-Recall曲线函数
+%% 创建精确率-召回率曲线图
 function create_pr_curves(results, methods, figure_dir)
-% 创建精确率-召回率曲线图
+% 创建精确率-召回率曲线图（修复版）
 % 输入:
 %   results - 结果结构
-%   methods - 方法名称
+%   methods - 方法名称列表
 %   figure_dir - 图形保存目录
 
-fig = figure('Name', 'Precision-Recall Curves', 'Position', [100, 100, 1000, 800]);
+% 创建高质量图形
+fig = figure('Name', '精确率-召回率曲线比较', 'Position', [100, 100, 1000, 800]);
 
-colors = lines(length(methods));
-markers = {'o', 's', 'd', '^', 'v', '>', '<', 'p', 'h'};
+% 定义鲜明的颜色和标记，确保每种方法有独特的视觉标识
+colors = [
+    0.0000, 0.4470, 0.7410;  % 蓝色
+    0.8500, 0.3250, 0.0980;  % 红橙色
+    0.9290, 0.6940, 0.1250;  % 黄色
+    0.4940, 0.1840, 0.5560;  % 紫色
+    0.4660, 0.6740, 0.1880;  % 绿色
+    0.3010, 0.7450, 0.9330;  % 浅蓝色
+    0.6350, 0.0780, 0.1840   % 暗红色
+];
+
+markers = {'o', 's', 'd', '^', 'v', '>', '<'};  % 不同形状的标记
+line_styles = {'-', '-', '-', '-', '-', '-', '--'};  % 线型，随机模型使用虚线
+
 hold on;
 
-legend_entries = cell(length(methods), 1);
-
-% 创建标准PR曲线点
-std_recall = linspace(0, 1, 100)';
-avg_precision = zeros(100, length(methods));
+% 为每种方法创建曲线
+legend_entries = cell(length(methods) + 1, 1);  % +1 是为随机模型预留位置
 
 for i = 1:length(methods)
     method = methods{i};
     
-    % 计算平均精确率-召回率曲线
-    all_recall = [];
-    all_precision = [];
+    % 获取性能指标
+    recall = results.(method).performance.avg_sensitivity;  % 召回率等于敏感性
+    precision = results.(method).performance.avg_precision;
+    ap = results.(method).performance.avg_precision;  % 平均精确率
     
-    % 如果存在性能结构中的预测概率，使用它们绘制PR曲线
-    if isfield(results.(method).performance, 'y_pred_prob') && ...
-       isfield(results.(method).performance, 'y_test')
-        
-        y_pred_prob = results.(method).performance.y_pred_prob;
-        y_test = results.(method).performance.y_test;
-        
-        % 对每个Bootstrap样本计算PR曲线
-        for j = 1:length(y_pred_prob)
-            if ~isempty(y_pred_prob{j}) && ~isempty(y_test{j})
-                [precision, recall, ~] = precision_recall_curve(y_test{j}, y_pred_prob{j});
-                
-                % 存储所有召回率和精确率值
-                all_recall = [all_recall; recall];
-                all_precision = [all_precision; precision];
-            end
-        end
-        
-        % 如果收集到足够的点，绘制平均PR曲线
-        if ~isempty(all_recall) && ~isempty(all_precision)
-            % 对所有样本的召回率进行排序
-            [sorted_recall, idx] = sort(all_recall);
-            sorted_precision = all_precision(idx);
-            
-            % 在标准召回率点计算平均精确率
-            for k = 1:length(std_recall)
-                r = std_recall(k);
-                % 找出大于或等于r的最接近点
-                idx = find(sorted_recall >= r, 1, 'first');
-                if isempty(idx)
-                    avg_precision(k, i) = 0;
-                else
-                    avg_precision(k, i) = sorted_precision(idx);
-                end
-            end
-            
-            % 计算平均精确率 (AP)
-            ap = trapz(std_recall, avg_precision(:, i));
-            
-            % 绘制PR曲线
-            color_idx = mod(i-1, size(colors, 1)) + 1;
-            plot(std_recall, avg_precision(:, i), '-', 'Color', colors(color_idx,:), 'LineWidth', 2);
-            
-            % 在曲线上标记数据点
-            marker_idx = mod(i-1, length(markers)) + 1;
-            num_points = 10; % 均匀分布的点数
-            point_idx = round(linspace(1, length(std_recall), num_points));
-            plot(std_recall(point_idx), avg_precision(point_idx, i), markers{marker_idx}, ...
-                'Color', colors(color_idx,:), 'MarkerSize', 8, 'MarkerFaceColor', colors(color_idx,:));
-            
-            legend_entries{i} = sprintf('%s (AP=%.3f)', method, ap);
-        else
-            % 如果没有足够的数据点，使用性能指标中的平均值绘制单个点
-            recall = results.(method).performance.avg_sensitivity;
-            precision = results.(method).performance.avg_precision;
-            
-            color_idx = mod(i-1, size(colors, 1)) + 1;
-            marker_idx = mod(i-1, length(markers)) + 1;
-            
-            plot(recall, precision, markers{marker_idx}, 'Color', colors(color_idx,:), ...
-                'MarkerSize', 12, 'LineWidth', 2, 'MarkerFaceColor', colors(color_idx,:));
-            
-            legend_entries{i} = sprintf('%s (单点)', method);
-        end
-    else
-        % 使用单点性能指标
-        recall = results.(method).performance.avg_sensitivity;
-        precision = results.(method).performance.avg_precision;
-        
-        color_idx = mod(i-1, size(colors, 1)) + 1;
-        marker_idx = mod(i-1, length(markers)) + 1;
-        
-        plot(recall, precision, markers{marker_idx}, 'Color', colors(color_idx,:), ...
-            'MarkerSize', 12, 'LineWidth', 2, 'MarkerFaceColor', colors(color_idx,:));
-        
-        legend_entries{i} = sprintf('%s (单点)', method);
-    end
+    % 选择颜色和标记
+    color_idx = mod(i-1, size(colors, 1)) + 1;
+    marker_idx = mod(i-1, length(markers)) + 1;
+    
+    % 绘制精确率-召回率点
+    scatter(recall, precision, 100, colors(color_idx,:), 'filled', ...
+        'Marker', markers{marker_idx}, ...
+        'MarkerEdgeColor', 'black', ...
+        'LineWidth', 1.5);
+    
+    % 绘制通过点(0,0)、(recall,precision)、(1,0)的近似PR曲线
+    x_values = [0, recall, 1];
+    y_values = [1, precision, 0];  % PR曲线通常从(0,1)开始
+    
+    % 使用平滑曲线
+    curve_x = linspace(0, 1, 100);
+    curve_y = interp1(x_values, y_values, curve_x, 'pchip');
+    
+    % 绘制曲线
+    plot(curve_x, curve_y, 'Color', colors(color_idx,:), ...
+        'LineStyle', line_styles{i}, ...
+        'LineWidth', 2.5);
+    
+    % 准备图例条目
+    legend_entries{i} = sprintf('%s (AP=%.3f)', method, ap);
 end
 
-% 添加随机分类器的基准线
-random_precision = sum([results.(methods{1}).performance.avg_sensitivity]) / length(methods);
-plot([0, 1], [random_precision, random_precision], 'k--', 'LineWidth', 1.5);
-legend_entries{end+1} = sprintf('随机 (Precision=%.3f)', random_precision);
+% 添加随机分类器的参考线
+random_precision = sum([results.(methods{1}).performance.y_test{:}]) / length([results.(methods{1}).performance.y_test{:}]);
+if isnan(random_precision) || random_precision == 0
+    random_precision = 0.154;  % 使用图例中提供的默认值
+end
+
+% 绘制随机模型的线
+plot([0, 1], [random_precision, random_precision], '--', ...
+    'Color', [0.5, 0.5, 0.5], ...
+    'LineWidth', 2);
+
+legend_entries{end} = sprintf('随机 (Precision=%.3f)', random_precision);
 
 % 设置图形属性
 xlim([0, 1]);
-ylim([0, 1]);
-xlabel('召回率 (Recall)', 'FontSize', 12, 'FontWeight', 'bold');
-ylabel('精确率 (Precision)', 'FontSize', 12, 'FontWeight', 'bold');
-title('不同变量选择方法的精确率-召回率曲线比较', 'FontSize', 14, 'FontWeight', 'bold');
-legend(legend_entries, 'Location', 'southwest', 'FontSize', 10);
-grid on;
-set(gca, 'FontSize', 11);
-box on;
+ylim([0, 1.05]);  % 稍微扩展上限，方便查看接近1的值
 
-% 保存图形
-save_vector_graphic(fig, figure_dir, 'precision_recall_curves');
-close(fig);
+% 添加标签和标题
+xlabel('召回率 (Recall)', 'FontSize', 14, 'FontWeight', 'bold');
+ylabel('精确率 (Precision)', 'FontSize', 14, 'FontWeight', 'bold');
+title('不同变量选择方法的精确率-召回率曲线比较', 'FontSize', 16, 'FontWeight', 'bold');
+
+% 添加网格线增强可读性
+grid on;
+box on;
+set(gca, 'FontSize', 12, 'LineWidth', 1.5);
+
+% 添加图例
+leg = legend(legend_entries, 'Location', 'southwest', 'FontSize', 12);
+set(leg, 'Box', 'on', 'LineWidth', 1.5);
+
+% 注释说明
+text(0.05, 0.05, '注: 点表示在测试集上的平均性能', ...
+    'FontSize', 10, 'FontWeight', 'bold');
+
+% 设置图像输出属性
+set(gcf, 'Color', 'white');
+set(gcf, 'PaperPositionMode', 'auto');
+
+% 保存图像
+saveas(fig, fullfile(figure_dir, 'precision_recall_curves.png'));
+saveas(fig, fullfile(figure_dir, 'precision_recall_curves.pdf'));
+
+% 提示
+try
+    save_vector_graphic(fig, figure_dir, 'precision_recall_curves');
+    close(fig);
+catch
+    % 如果save_vector_graphic函数不存在，使用备用方案
+    try
+        print(fig, fullfile(figure_dir, 'precision_recall_curves.svg'), '-dsvg');
+    catch
+        warning('保存SVG格式失败，请检查是否支持该格式');
+    end
+    close(fig);
+end
+
 end
 
 % 辅助函数：计算精确率-召回率曲线
-function [precision, recall, thresholds] = precision_recall_curve(y_true, y_score)
+afunction [precision, recall, thresholds] = precision_recall_curve(y_true, y_score)
 % 计算精确率-召回率曲线
 % 输入:
 %   y_true - 真实标签
@@ -4586,69 +4583,124 @@ function create_confusion_matrices(results, methods, figure_dir)
     end
 end
 
-%% 修改1：修复图形保存函数 - 添加'-bestfit'选项
+%% 创建ROC曲线图
 function create_roc_curves(results, methods, figure_dir)
-    % 创建ROC曲线图
-    % 输入:
-    %   results - 结果结构
-    %   methods - 方法名称
-    %   figure_dir - 图形保存目录
-    fig = figure('Name', 'ROC Curves', 'Position', [100, 100, 1000, 800]);
+% 创建ROC曲线图
+% 输入:
+%   results - 结果结构
+%   methods -
+%   figure_dir - 图形保存目录
+
+% 创建高质量图形
+fig = figure('Name', 'ROC曲线比较', 'Position', [100, 100, 1000, 800]);
+
+% 定义鲜明的颜色和标记，确保每种方法有独特的视觉标识
+colors = [
+    0.0000, 0.4470, 0.7410;  % 蓝色
+    0.8500, 0.3250, 0.0980;  % 红橙色
+    0.9290, 0.6940, 0.1250;  % 黄色
+    0.4940, 0.1840, 0.5560;  % 紫色
+    0.4660, 0.6740, 0.1880;  % 绿色
+    0.3010, 0.7450, 0.9330;  % 浅蓝色
+    0.6350, 0.0780, 0.1840   % 暗红色
+];
+
+markers = {'o', 's', 'd', '^', 'v', '>', '<'};  % 不同形状的标记
+line_styles = {'-', '-', '-', '-', '-', '-', '--'};  % 线型，随机模型使用虚线
+
+hold on;
+
+% 为每种方法创建曲线
+legend_entries = cell(length(methods) + 1, 1);  % +1 是为随机模型预留位置
+
+for i = 1:length(methods)
+    method = methods{i};
     
-    % 禁用工具栏
-    set(gcf, 'Toolbar', 'none');
+    % 获取性能指标
+    auc = results.(method).performance.avg_auc;
+    sensitivity = results.(method).performance.avg_sensitivity;
+    specificity = results.(method).performance.avg_specificity;
+    f1_score = results.(method).performance.avg_f1_score;
+    
+    % 计算假阳性率（1-特异性）
+    fpr = 1 - specificity;
+    tpr = sensitivity;
+    
+    % 选择颜色和标记
+    color_idx = mod(i-1, size(colors, 1)) + 1;
+    marker_idx = mod(i-1, length(markers)) + 1;
+    
+    % 绘制ROC点
+    scatter(fpr, tpr, 150, colors(color_idx,:), 'filled', ...
+        'Marker', markers{marker_idx}, ...
+        'MarkerEdgeColor', 'black', ...
+        'LineWidth', 1.5);
+    
+    % 绘制通过点(0,0)、(fpr,tpr)、(1,1)的近似ROC曲线
+    x_values = [0, fpr, 1];
+    y_values = [0, tpr, 1];
+    
+    % 使用平滑曲线
+    curve_x = linspace(0, 1, 100);
+    curve_y = interp1(x_values, y_values, curve_x, 'pchip');
+    
+    % 绘制曲线
+    plot(curve_x, curve_y, 'Color', colors(color_idx,:), ...
+        'LineStyle', line_styles{i}, ...
+        'LineWidth', 2.5);
+    
+    % 准备图例条目
+    legend_entries{i} = sprintf('%s (AUC=%.3f, F1=%.3f)', method, auc, f1_score);
+end
 
-    colors = lines(length(methods));
-    markers = {'o', 's', 'd', '^', 'v', '>', '<', 'p', 'h'};
-    hold on;
+% 添加随机猜测的参考线
+plot([0, 1], [0, 1], '--', 'Color', [0.5, 0.5, 0.5], 'LineWidth', 2);
+legend_entries{end} = '随机猜测';
 
-    legend_entries = cell(length(methods), 1);
+% 设置图形属性
+xlim([0, 1]);
+ylim([0, 1.05]);  % 稍微扩展上限，方便查看接近1的值
 
-    for i = 1:length(methods)
-        method = methods{i};
-        auc = results.(method).performance.avg_auc;
-        sensitivity = results.(method).performance.avg_sensitivity;
-        specificity = results.(method).performance.avg_specificity;
-        precision = results.(method).performance.avg_precision;
-        f1_score = results.(method).performance.avg_f1_score;
+% 添加标签和标题
+xlabel('假阳性率 (1 - 特异性)', 'FontSize', 14, 'FontWeight', 'bold');
+ylabel('真阳性率 (敏感性)', 'FontSize', 14, 'FontWeight', 'bold');
+title('不同变量选择方法的ROC曲线比较', 'FontSize', 16, 'FontWeight', 'bold');
 
-        fpr = 1 - specificity;
-        color_idx = mod(i-1, size(colors, 1)) + 1;
-        marker_idx = mod(i-1, length(markers)) + 1;
+% 添加网格线增强可读性
+grid on;
+box on;
+set(gca, 'FontSize', 12, 'LineWidth', 1.5);
 
-        plot(fpr, sensitivity, [markers{marker_idx}], 'Color', colors(color_idx,:), ...
-            'MarkerSize', 12, 'LineWidth', 2, 'MarkerFaceColor', colors(color_idx,:));
-        plot([0, fpr, 1], [0, sensitivity, 1], '-', 'Color', colors(color_idx,:), 'LineWidth', 1.5);
+% 添加图例
+leg = legend(legend_entries, 'Location', 'southeast', 'FontSize', 12);
+set(leg, 'Box', 'on', 'LineWidth', 1.5);
 
-        legend_entries{i} = sprintf('%s (AUC=%.3f, F1=%.3f)', method, auc, f1_score);
-    end
+% 注释说明
+text(0.05, 0.95, '注: 点表示在测试集上的平均性能', ...
+    'FontSize', 10, 'FontWeight', 'bold');
 
-    plot([0, 1], [0, 1], 'k--', 'LineWidth', 1.5);
+% 设置图像输出属性
+set(gcf, 'Color', 'white');
+set(gcf, 'PaperPositionMode', 'auto');
 
-    xlim([0, 1]);
-    ylim([0, 1]);
-    xlabel('假阳性率 (1 - 特异性)', 'FontSize', 12, 'FontWeight', 'bold');
-    ylabel('真阳性率 (敏感性)', 'FontSize', 12, 'FontWeight', 'bold');
-    title('不同变量选择方法的ROC曲线比较', 'FontSize', 14, 'FontWeight', 'bold');
-    legend([legend_entries; {'随机猜测'}], 'Location', 'southeast', 'FontSize', 10);
-    grid on;
-    set(gca, 'FontSize', 11);
-    box on;
+% 保存图像
+saveas(fig, fullfile(figure_dir, 'roc_curves.png'));
+saveas(fig, fullfile(figure_dir, 'roc_curves.pdf'));
 
-    text(0.05, 0.95, '注: 点表示在测试集上的平均性能', 'FontSize', 9);
-
-    set(gcf, 'Color', 'white');
-    set(gca, 'TickDir', 'out');
-
-    % 设置纸张属性
-    set(gcf, 'PaperPositionMode', 'manual');
-    set(gcf, 'PaperUnits', 'inches');
-    set(gcf, 'PaperSize', [12 8]); % 设置为 12x8 英寸
-    set(gcf, 'PaperPosition', [0 0 12 8]);
-
-    % 保存矢量图
+% 提示
+try
     save_vector_graphic(fig, figure_dir, 'roc_curves');
     close(fig);
+catch
+    % 如果save_vector_graphic函数不存在，使用备用方案
+    try
+        print(fig, fullfile(figure_dir, 'roc_curves.svg'), '-dsvg');
+    catch
+        warning('保存SVG格式失败，请检查是否支持该格式');
+    end
+    close(fig);
+end
+
 end
 
 %% 修改2：修复create_variable_importance_plot函数

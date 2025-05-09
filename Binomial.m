@@ -7,7 +7,6 @@ function Binomial(filename)
 %   filename - 包含数据的.mat文件路径
 % 示例:
 %   Binomial('mydata.mat');
-% https://github.com/La-Petite-Princess/Binomial/archive/refs/heads/main.zip
 
 % 开始计时
 tic;
@@ -16,7 +15,7 @@ tic;
 rng(42);
 
 % 设置日志级别
-set_log_level('info'); % 可选值: 'debug', 'info', 'warning', 'error'
+set_log_level('debug'); % 可选值: 'debug', 'info', 'warning', 'error'
 
 % 系统信息收集
 log_message('info', '系统配置:');

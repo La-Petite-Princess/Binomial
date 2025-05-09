@@ -2175,15 +2175,19 @@ classdef reporting_module
                 aic_table = reporting_module.create_aic_bic_table(results, methods);
                 min_aic_method = aic_table.Method{1};  % 已经按AIC排序
                 
-                fprintf(fid, '            <li><strong>最优模型：</strong> 根据F1分数，<span class="highlight">%s</span>方法表现最佳(%.3f)，而根据AIC，<span class="highlight">%s</span>方法表现最佳。</li>\n', 
+                fprintf(fid, '            <li><strong>最优模型：</strong> 根据F1分数，<span class="highlight">%s</span>方法表现最佳(%.3f)，而根据AIC，<span class="highlight">%s</span>方法表现最佳。</li>\n', ...
                     best_method, best_f1, min_aic_method);
                 
-                % 如果有交叉验证结果
+               % 如果有交叉验证结果
                 if ~isempty(cv_results) && isfield(cv_results, 'f1_score')
                     mean_cv_f1 = mean(cv_results.f1_score, 'omitnan');
                     std_cv_f1 = std(cv_results.f1_score, 'omitnan');
-                    fprintf(fid, '            <li><strong>交叉验证：</strong> K折交叉验证的平均F1分数为%.3f(±%.3f)，表明模型的<span class="%s">%s稳定性</span>。</li>\n',
-                        mean_cv_f1, std_cv_f1, (std_cv_f1 < 0.1 ? 'positive' : 'warning'), (std_cv_f1 < 0.1 ? '良好' : '一般'));
+                    
+                    class_str = ternary(std_cv_f1 < 0.1, 'positive', 'warning');
+                    desc_str = ternary(std_cv_f1 < 0.1, '良好', '一般');
+                    
+                    fprintf(fid, ' <li><strong>交叉验证：</strong> K折交叉验证的平均F1分数为%.3f(±%.3f)，表明模型的<span class="%s">%s稳定性</span>。</li>\n', ...
+                        mean_cv_f1, std_cv_f1, class_str, desc_str);
                 end
                 
                 % 变量重要性
@@ -2191,7 +2195,7 @@ classdef reporting_module
                     imp_table = var_contribution.overall_importance;
                     if height(imp_table) >= 3
                         top3_vars = imp_table.Variable(1:3);
-                        fprintf(fid, '            <li><strong>关键变量：</strong> 三个最重要的预测变量是 <span class="highlight">%s</span>、<span class="highlight">%s</span> 和 <span class="highlight">%s</span>。</li>\n',
+                        fprintf(fid, '            <li><strong>关键变量：</strong> 三个最重要的预测变量是 <span class="highlight">%s</span>、<span class="highlight">%s</span> 和 <span class="highlight">%s</span>。</li>\n', ...
                             top3_vars{1}, top3_vars{2}, top3_vars{3});
                     end
                 end
@@ -2334,9 +2338,9 @@ classdef reporting_module
                     
                     % 性能摘要
                     if isfield(results.(method).performance, 'avg_accuracy')
-                        fprintf(fid, '        <p><strong>性能摘要：</strong> 准确率 = %.3f, F1分数 = %.3f, AUC = %.3f</p>\n',
-                            results.(method).performance.avg_accuracy,
-                            results.(method).performance.avg_f1_score,
+                        fprintf(fid, '        <p><strong>性能摘要：</strong> 准确率 = %.3f, F1分数 = %.3f, AUC = %.3f</p>\n', ...
+                            results.(method).performance.avg_accuracy, ...
+                            results.(method).performance.avg_f1_score, ...
                             results.(method).performance.avg_auc);
                     end
                     
@@ -2576,7 +2580,7 @@ classdef reporting_module
                             fprintf(fid, '                <td>%s</td>\n', var_name);
                             fprintf(fid, '                <td>%.3f</td>\n', cv_val);
                             fprintf(fid, '                <td>%s</td>\n', stability);
-                            fprintf(fid, '                <td><div style="background-color: %s; width: %d%%; height: 20px;"></div></td>\n', 
+                            fprintf(fid, '                <td><div style="background-color: %s; width: %d%%; height: 20px;"></div></td>\n', ...
                                 color, round(min(cv_val * 100, 100)));
                             fprintf(fid, '            </tr>\n');
                         end
@@ -2599,7 +2603,7 @@ classdef reporting_module
                 best_method = methods{best_idx};
                 best_perf = results.(best_method).performance;
                 
-                fprintf(fid, '        <p><strong>最佳模型选择：</strong> 基于综合性能指标，<span class="highlight">%s</span>方法表现最佳，其F1分数为%.3f，AUC为%.3f。</p>\n',
+                fprintf(fid, '        <p><strong>最佳模型选择：</strong> 基于综合性能指标，<span class="highlight">%s</span>方法表现最佳，其F1分数为%.3f，AUC为%.3f。</p>\n', ...
                     best_method, best_perf.avg_f1_score, best_perf.avg_auc);
                 
                 % 模型稳定性分析
@@ -2617,9 +2621,9 @@ classdef reporting_module
                     else
                         fprintf(fid, '最佳方法的所有变量系数<span class="positive">都具有良好的稳定性</span>，表明模型具有可靠的泛化能力。');
                     end
-                } else {
+                else 
                     fprintf(fid, '无法评估模型的系数稳定性，因为缺少相关数据。');
-                }
+                end
                 fprintf(fid, '</p>\n');
                 
                 % 关键变量分析
@@ -2629,23 +2633,23 @@ classdef reporting_module
                     top3_vars = var_contribution.overall_importance.Variable(1:3);
                     top3_imp = var_contribution.overall_importance.Normalized_Importance(1:3);
                     
-                    fprintf(fid, '三个最重要的变量是<span class="highlight">%s (%.1f%%)</span>、<span class="highlight">%s (%.1f%%)</span>和<span class="highlight">%s (%.1f%%)</span>，这些变量对预测结果具有最大影响。',
+                    fprintf(fid, '三个最重要的变量是<span class="highlight">%s (%.1f%%)</span>、<span class="highlight">%s (%.1f%%)</span>和<span class="highlight">%s (%.1f%%)</span>，这些变量对预测结果具有最大影响。', ...
                         top3_vars{1}, top3_imp(1), top3_vars{2}, top3_imp(2), top3_vars{3}, top3_imp(3));
-                } else {
+                 else 
                     % 使用频率表
                     top3_vars = var_freq_table.VariableName(1:3);
                     top3_freq = var_freq_table.Average(1:3);
                     
-                    fprintf(fid, '根据选择频率，三个最重要的变量是<span class="highlight">%s (%.1f%%)</span>、<span class="highlight">%s (%.1f%%)</span>和<span class="highlight">%s (%.1f%%)</span>。',
+                    fprintf(fid, '根据选择频率，三个最重要的变量是<span class="highlight">%s (%.1f%%)</span>、<span class="highlight">%s (%.1f%%)</span>和<span class="highlight">%s (%.1f%%)</span>。', ...
                         top3_vars{1}, top3_freq(1)*100, top3_vars{2}, top3_freq(2)*100, top3_vars{3}, top3_freq(3)*100);
-                }
+                end
                 fprintf(fid, '</p>\n');
                 
                 % 对比分析
                 fprintf(fid, '        <p><strong>方法对比：</strong> ');
                 
                 % 找出性能差异最大的方法
-                perf_range = max([results.(methods{1}).performance.avg_f1_score, results.(methods{2}).performance.avg_f1_score]) - 
+                perf_range = max([results.(methods{1}).performance.avg_f1_score, results.(methods{2}).performance.avg_f1_score]) - ...
                              min([results.(methods{1}).performance.avg_f1_score, results.(methods{2}).performance.avg_f1_score]);
                 
                 if perf_range > 0.1
@@ -2660,7 +2664,7 @@ classdef reporting_module
                 fprintf(fid, '        <ol>\n');
                 
                 % 最佳模型建议
-                fprintf(fid, '            <li><strong>模型选择：</strong> 建议采用<span class="highlight">%s</span>方法构建最终模型，因为它在F1分数和AUC等综合指标上表现最佳。</li>\n',
+                fprintf(fid, '            <li><strong>模型选择：</strong> 建议采用<span class="highlight">%s</span>方法构建最终模型，因为它在F1分数和AUC等综合指标上表现最佳。</li>\n', ...
                     best_method);
                 
                 % 变量建议

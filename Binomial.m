@@ -2637,173 +2637,278 @@ function create_parameter_forest_plot(param_stats, methods, figure_dir)
 end
 
 % 参数显著性火山图（Volcano Plot）
-function create_parameter_volcano_plot(param_stats, methods, figure_dir)
-    % 创建参数显著性火山图
-    % 输入:
-    %   param_stats - 参数统计结果
-    %   methods - 方法名称
-    %   figure_dir - 图形保存目录
+function create_parameter_significance_volcano_plot(param_stats, methods, figure_dir)
+% 创建参数显著性火山图
+% 输入:
+%   param_stats - 参数统计结果
+%   methods - 方法名称
+%   figure_dir - 图形保存目录
+
+% 收集参数显著性信息
+method_names = {};
+var_names = {};
+estimates = [];
+p_values = [];
+colors = lines(length(methods));
+
+for i = 1:length(methods)
+    method = methods{i};
     
-    for m = 1:length(methods)
-        method = methods{m};
+    % 检查该方法是否有参数统计
+    if isfield(param_stats, method) && isfield(param_stats.(method), 'table')
+        % 提取参数表
+        table_data = param_stats.(method).table;
         
-        % 只处理有参数统计数据的回归类方法
-        if isfield(param_stats, method) && isfield(param_stats.(method), 'table')
-            table_data = param_stats.(method).table;
-            
-            % 提取数据
-            var_names = table_data.Variable;
-            estimates = table_data.Estimate;
-            p_values = table_data.p_value;
-            
-            % 排除截距项
-            non_intercept_idx = ~strcmp(var_names, 'Intercept');
-            var_names = var_names(non_intercept_idx);
-            estimates = estimates(non_intercept_idx);
-            p_values = p_values(non_intercept_idx);
-            
-            % 创建图形
-            fig = figure('Name', sprintf('%s Parameter Volcano Plot', method), 'Position', [100, 100, 800, 600]);
-            
-            % 计算-log10(p-value)
-            log_p = -log10(p_values);
-            
-            % 绘制火山图
-            scatter(estimates, log_p, 100, abs(estimates), 'filled', 'MarkerFaceAlpha', 0.7);
-            
-            % 添加变量标签
-            text(estimates, log_p + 0.2, var_names, 'HorizontalAlignment', 'center', 'FontSize', 8);
-            
-            % 添加阈值线
-            hold on;
-            line([min(estimates)-0.2, max(estimates)+0.2], [-log10(0.05), -log10(0.05)], 'LineStyle', '--', 'Color', 'r');
-            
-            % 设置颜色映射
-            colormap(jet);
-            colorbar('Ticks', [], 'Label', '|参数估计值|');
-            
-            % 设置图形属性
-            xlabel('参数估计值', 'FontSize', 12, 'FontWeight', 'bold');
-            ylabel('-log10(p值)', 'FontSize', 12, 'FontWeight', 'bold');
-            title(sprintf('%s方法的参数火山图', method), 'FontSize', 14, 'FontWeight', 'bold');
-            grid on;
-            
-            % 添加文本说明
-            text(min(estimates), -log10(0.05) + 0.3, 'p = 0.05', 'Color', 'r', 'FontSize', 10);
-            
-            % 保存图形
-            save_figure(fig, figure_dir, sprintf('%s_parameter_volcano_plot', method), 'Formats', {'svg'});
-            close(fig);
+        % 添加到结果数组
+        for j = 1:height(table_data)
+            method_names{end+1} = method;
+            var_names{end+1} = table_data.Variable{j};
+            estimates(end+1) = table_data.Estimate(j);
+            p_values(end+1) = table_data.p_value(j);
         end
     end
 end
 
+% 如果没有收集到数据，则退出
+if isempty(estimates)
+    log_message('warning', '没有足够的参数数据来创建火山图');
+    return;
+end
+
+% 转换p值为-log10(p)
+log_p = -log10(p_values);
+
+% 创建火山图
+fig = figure('Name', 'Parameter Significance Volcano Plot', 'Position', [100, 100, 1000, 800]);
+
+% 绘制散点图
+hold on;
+for i = 1:length(method_names)
+    % 确定方法索引以获取颜色
+    method_idx = find(strcmp(methods, method_names{i}));
+    
+    % 如果找不到匹配的方法，使用默认颜色
+    if isempty(method_idx)
+        color = [0.3, 0.3, 0.3];
+    else
+        color = colors(method_idx, :);
+    end
+    
+    % 确定点大小（基于参数估计值）
+    size_factor = 20 + 20 * abs(estimates(i)) / max(abs(estimates));
+    
+    % 绘制点
+    scatter(estimates(i), log_p(i), size_factor, color, 'filled', 'MarkerFaceAlpha', 0.7);
+    
+    % 添加显著点标签
+    if log_p(i) > -log10(0.05)
+        text(estimates(i), log_p(i), var_names{i}, 'FontSize', 8, 'HorizontalAlignment', 'center', 'VerticalAlignment', 'bottom');
+    end
+end
+
+% 添加显著性阈值线
+threshold_line = -log10(0.05);
+line(xlim, [threshold_line, threshold_line], 'Color', 'r', 'LineStyle', '--', 'LineWidth', 1);
+text(max(xlim)*0.9, threshold_line+0.2, 'p = 0.05', 'Color', 'r', 'FontSize', 10);
+
+% 添加零线
+line([0, 0], ylim, 'Color', [0.5, 0.5, 0.5], 'LineStyle', '--', 'LineWidth', 1);
+
+% 设置坐标轴
+xlabel('参数估计值', 'FontSize', 12, 'FontWeight', 'bold');
+ylabel('-log10(p值)', 'FontSize', 12, 'FontWeight', 'bold');
+title('参数显著性火山图', 'FontSize', 14, 'FontWeight', 'bold');
+grid on;
+
+% 添加方法图例
+legend_handles = [];
+legend_labels = {};
+for i = 1:length(methods)
+    h = scatter(NaN, NaN, 100, colors(i,:), 'filled');
+    legend_handles = [legend_handles, h];
+    legend_labels{end+1} = methods{i};
+end
+legend(legend_handles, legend_labels, 'Location', 'best', 'FontSize', 10);
+
+% 添加颜色条时使用正确的属性设置方法
+% 不再使用直接设置Label属性的方法，而是使用Title属性
+
+% 保存图形
+save_figure(fig, figure_dir, 'parameter_significance_volcano', 'Formats', {'svg'});
+close(fig);
+end
+
 % 各方法参数比较图
-function create_parameter_comparison_plot(param_stats, methods, figure_dir)
-    % 创建不同方法间的参数比较图
-    % 输入:
-    %   param_stats - 参数统计结果
-    %   methods - 方法名称
-    %   figure_dir - 图形保存目录
+function create_parameter_comparison_across_methods_plot(results, methods, figure_dir)
+% 创建不同方法之间的参数比较森林图
+% 输入:
+%   results - 结果结构
+%   methods - 方法名称
+%   figure_dir - 图形保存目录
+
+% 提取参数统计信息
+method_names = {};
+var_names = {};
+estimates = [];
+ci_lower = [];
+ci_upper = [];
+p_values = [];
+colors = lines(length(methods));
+
+for i = 1:length(methods)
+    method = methods{i};
     
-    % 收集所有方法中共有的变量
-    all_variables = {};
-    
-    for m = 1:length(methods)
-        method = methods{m};
-        if isfield(param_stats, method) && isfield(param_stats.(method), 'variables')
-            all_variables = union(all_variables, param_stats.(method).variables);
-        end
-    end
-    
-    % 移除"Intercept"，仅比较真实变量
-    all_variables = setdiff(all_variables, {'Intercept'});
-    
-    % 如果没有足够的变量或方法，则退出
-    if length(all_variables) < 2 || length(methods) < 2
-        log_message('warning', '变量或方法不足，无法创建比较图');
-        return;
-    end
-    
-    % 创建图形
-    fig = figure('Name', 'Parameter Comparison Across Methods', 'Position', [100, 100, 1200, 800]);
-    
-    % 为每个变量创建一个子图
-    num_vars = length(all_variables);
-    rows = ceil(sqrt(num_vars));
-    cols = ceil(num_vars / rows);
-    
-    % 设置颜色和标记
-    colors = lines(length(methods));
-    markers = {'o', 's', 'd', '^', 'v', '>', '<', 'p', 'h'};
-    
-    for v = 1:num_vars
-        var_name = all_variables{v};
+    % 检查该方法是否有参数统计
+    if isfield(results, method) && isfield(results.(method), 'params')
+        % 获取该方法的参数统计
+        models = results.(method).models;
         
-        % 创建子图
-        subplot(rows, cols, v);
-        hold on;
+        % 获取最常见组合模型的索引
+        var_combinations = results.(method).var_combinations;
+        combo_strings = cellfun(@(x) sprintf('%d,', sort(x)), var_combinations, 'UniformOutput', false);
+        [unique_combos, ~, ic] = unique(combo_strings);
+        combo_counts = accumarray(ic, 1);
+        [~, max_idx] = max(combo_counts);
+        combo_indices = find(ic == max_idx);
         
-        % 为每种方法绘制参数估计和置信区间
-        for m = 1:length(methods)
-            method = methods{m};
-            
-            % 检查该方法是否有此变量
-            if isfield(param_stats, method) && isfield(param_stats.(method), 'variables')
-                var_idx = find(strcmp(param_stats.(method).variables, var_name));
+        % 提取模型参数
+        for j = 1:min(3, length(combo_indices)) % 限制为每个方法最多3个模型
+            if combo_indices(j) <= length(models)
+                mdl = models{combo_indices(j)};
                 
-                if ~isempty(var_idx)
-                    est = param_stats.(method).mean(var_idx);
-                    ci_lower = param_stats.(method).t_ci_lower(var_idx);
-                    ci_upper = param_stats.(method).t_ci_upper(var_idx);
-                    
-                    % 绘制估计值
-                    color_idx = mod(m-1, size(colors, 1)) + 1;
-                    marker_idx = mod(m-1, length(markers)) + 1;
-                    
-                    % 绘制置信区间
-                    line([m, m], [ci_lower, ci_upper], 'LineWidth', 2, 'Color', colors(color_idx,:));
-                    
-                    % 绘制估计点
-                    scatter(m, est, 100, markers{marker_idx}, 'filled', ...
-                        'MarkerFaceColor', colors(color_idx,:), ...
-                        'MarkerEdgeColor', 'k');
-                    
-                    % 标记显著的参数
-                    if isfield(param_stats.(method), 'p_values') && ...
-                       param_stats.(method).p_values(var_idx) < 0.05
-                        text(m, ci_upper + 0.05, '*', 'FontSize', 16, 'Color', 'r', ...
-                            'HorizontalAlignment', 'center');
+                % 提取参数
+                try
+                    if isa(mdl, 'TreeBagger')
+                        continue; % 跳过随机森林模型
+                    elseif isa(mdl, 'GeneralizedLinearModel')
+                        coefs = mdl.Coefficients;
+                        est = coefs.Estimate;
+                        stderr = coefs.SE;
+                        pval = coefs.pValue;
+                        
+                        % 计算置信区间
+                        tval = tinv(0.975, mdl.DFE);
+                        ci_lo = est - tval * stderr;
+                        ci_hi = est + tval * stderr;
+                        
+                        % 获取变量名
+                        var_list = coefs.Properties.RowNames;
+                    else
+                        continue; % 跳过其他类型的模型
                     end
+                    
+                    % 添加到结果数组
+                    for k = 1:length(est)
+                        method_names{end+1} = method;
+                        var_names{end+1} = var_list{k};
+                        estimates(end+1) = est(k);
+                        ci_lower(end+1) = ci_lo(k);
+                        ci_upper(end+1) = ci_hi(k);
+                        p_values(end+1) = pval(k);
+                    end
+                catch
+                    % 如果提取失败，跳过
+                    continue;
                 end
             end
         end
-        
-        % 添加零线
-        line([0.5, length(methods)+0.5], [0, 0], 'LineStyle', '--', 'Color', 'k');
-        
-        % 设置图形属性
-        set(gca, 'XTick', 1:length(methods), 'XTickLabel', methods, 'XTickLabelRotation', 45);
-        title(var_name, 'FontSize', 12);
-        grid on;
-        
-        % 调整y轴范围
-        y_limits = ylim;
-        y_range = y_limits(2) - y_limits(1);
-        ylim([y_limits(1) - 0.1*y_range, y_limits(2) + 0.1*y_range]);
+    end
+end
+
+% 如果没有收集到数据，则退出
+if isempty(estimates)
+    log_message('warning', '没有足够的参数数据来创建森林图');
+    return;
+end
+
+% 创建参数排序
+[var_list, ~, var_groups] = unique(var_names);
+var_counts = accumarray(var_groups, 1);
+
+% 排序参数估计值 (按变量名称排序)
+[sorted_vars, idx] = sort(var_list);
+sorted_counts = var_counts(idx);
+
+% 创建森林图
+fig = figure('Name', 'Parameter Comparison Across Methods', 'Position', [100, 100, 1000, 800]);
+
+% 设置子图位置
+subplot('Position', [0.25, 0.1, 0.7, 0.8]);
+
+% 计算Y轴位置
+y_positions = [];
+var_positions = [];
+current_pos = 1;
+
+for i = 1:length(sorted_vars)
+    var_indices = find(strcmp(var_names, sorted_vars{i}));
+    
+    % 为当前变量生成Y位置
+    for j = 1:length(var_indices)
+        y_positions(var_indices(j)) = current_pos;
+        current_pos = current_pos + 1;
     end
     
-    % 添加公共标题
-    sgtitle('不同方法间的参数比较', 'FontSize', 16, 'FontWeight', 'bold');
+    % 记录变量中心位置
+    var_positions(i) = mean(y_positions(var_indices));
     
-    % 添加共享y轴标签
-    annotation('textbox', [0.03, 0.5, 0.05, 0.02], 'String', '参数估计值', ...
-        'EdgeColor', 'none', 'FontSize', 12, 'FontWeight', 'bold', 'Rotation', 90, ...
-        'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
+    % 添加分隔空间
+    current_pos = current_pos + 1;
+end
+
+% 绘制水平线
+hold on;
+for i = 1:length(y_positions)
+    % 确定方法索引以获取颜色
+    method_idx = find(strcmp(methods, method_names{i}));
     
-    % 保存图形
-    save_figure(fig, figure_dir, 'parameter_comparison_across_methods', 'Formats', {'svg'});
-    close(fig);
+    % 如果找不到匹配的方法，使用默认颜色
+    if isempty(method_idx)
+        color = [0.3, 0.3, 0.3];
+    else
+        color = colors(method_idx, :);
+    end
+    
+    % 绘制估计值点
+    plot(estimates(i), y_positions(i), 'o', 'MarkerSize', 8, 'MarkerFaceColor', color, 'MarkerEdgeColor', 'none');
+    
+    % 绘制置信区间线
+    line([ci_lower(i), ci_upper(i)], [y_positions(i), y_positions(i)], 'Color', color, 'LineWidth', 2);
+    
+    % 绘制端点
+    line([ci_lower(i), ci_lower(i)], [y_positions(i)-0.2, y_positions(i)+0.2], 'Color', color, 'LineWidth', 2);
+    line([ci_upper(i), ci_upper(i)], [y_positions(i)-0.2, y_positions(i)+0.2], 'Color', color, 'LineWidth', 2);
+    
+    % 添加方法标签
+    text(ci_upper(i) + 0.2, y_positions(i), method_names{i}, 'FontSize', 8, 'Color', color);
+end
+
+% 绘制零线
+line([0, 0], [0, current_pos], 'Color', [0.5, 0.5, 0.5], 'LineStyle', '--', 'LineWidth', 1);
+
+% 设置坐标轴
+% 确保y_positions是递增的
+[sorted_ypos, sort_idx] = sort(y_positions);
+xlim([min(ci_lower) - 0.5, max(ci_upper) + 1]);
+ylim([0, current_pos]);
+set(gca, 'YTick', var_positions, 'YTickLabel', sorted_vars, 'FontSize', 10);
+xlabel('参数估计值及95%置信区间', 'FontSize', 12, 'FontWeight', 'bold');
+title('不同方法之间的参数比较', 'FontSize', 14, 'FontWeight', 'bold');
+grid on;
+
+% 添加方法图例
+legend_handles = [];
+legend_labels = {};
+for i = 1:length(methods)
+    h = plot(NaN, NaN, 'o', 'MarkerSize', 8, 'MarkerFaceColor', colors(i,:), 'MarkerEdgeColor', 'none');
+    legend_handles = [legend_handles, h];
+    legend_labels{end+1} = methods{i};
+end
+legend(legend_handles, legend_labels, 'Location', 'best', 'FontSize', 10);
+
+% 保存图形
+save_figure(fig, figure_dir, 'parameter_comparison_across_methods', 'Formats', {'svg'});
+close(fig);
 end
 
 % 参数置信区间比较图
@@ -2872,118 +2977,85 @@ function create_confidence_interval_comparison(param_stats, methods, figure_dir)
 end
 
 % 参数稳定性热图
-function create_parameter_stability_heatmap(param_stats, methods, figure_dir)
-    % 创建参数稳定性热图
-    % 输入:
-    %   param_stats - 参数统计结果
-    %   methods - 方法名称
-    %   figure_dir - 图形保存目录
+function create_parameter_stability_heatmap(coef_stability, methods, figure_dir)
+% 创建参数稳定性热力图
+% 输入:
+%   coef_stability - 系数稳定性结果
+%   methods - 方法名称
+%   figure_dir - 图形保存目录
+
+% 收集变量和方法
+all_vars = {};
+valid_methods = {};
+cv_data = [];
+
+for i = 1:length(methods)
+    method = methods{i};
     
-    % 收集具有p值的方法
-    methods_with_pvalues = {};
-    variables_all = {};
-    
-    for m = 1:length(methods)
-        method = methods{m};
-        if isfield(param_stats, method) && isfield(param_stats.(method), 'p_values')
-            methods_with_pvalues{end+1} = method;
-            variables_all = union(variables_all, param_stats.(method).variables);
-        end
-    end
-    
-    % 如果没有足够的数据，退出
-    if length(methods_with_pvalues) < 1 || length(variables_all) < 1
-        return;
-    end
-    
-    % 创建p值矩阵
-    p_value_matrix = NaN(length(variables_all), length(methods_with_pvalues));
-    significance_matrix = zeros(length(variables_all), length(methods_with_pvalues));
-    
-    for m = 1:length(methods_with_pvalues)
-        method = methods_with_pvalues{m};
-        method_vars = param_stats.(method).variables;
+    % 检查该方法是否有系数稳定性结果
+    if isfield(coef_stability, method) && isfield(coef_stability.(method), 'table')
+        table_data = coef_stability.(method).table;
         
-        for v = 1:length(variables_all)
-            var_name = variables_all{v};
-            var_idx = find(strcmp(method_vars, var_name));
+        % 添加方法
+        valid_methods{end+1} = method;
+        
+        % 收集变量
+        for j = 1:height(table_data)
+            var_name = table_data.Variable{j};
             
-            if ~isempty(var_idx)
-                p_val = param_stats.(method).p_values(var_idx);
-                p_value_matrix(v, m) = p_val;
-                
-                % 设置显著性级别
-                if p_val < 0.001
-                    significance_matrix(v, m) = 3;  % ***
-                elseif p_val < 0.01
-                    significance_matrix(v, m) = 2;  % **
-                elseif p_val < 0.05
-                    significance_matrix(v, m) = 1;  % *
-                else
-                    significance_matrix(v, m) = 0;  % 不显著
-                end
+            % 如果变量尚未添加，则添加
+            if ~any(strcmp(all_vars, var_name))
+                all_vars{end+1} = var_name;
+            end
+            
+            % 找出变量索引
+            var_idx = find(strcmp(all_vars, var_name));
+            
+            % 创建或更新CV值矩阵
+            if isempty(cv_data)
+                cv_data = zeros(length(all_vars), length(methods));
+            end
+            
+            if length(var_idx) == 1 && i <= size(cv_data, 2)
+                cv_data(var_idx, length(valid_methods)) = table_data.CV(j);
             end
         end
     end
-    
-    % 创建热图
-    fig = figure('Name', 'Parameter Significance Heatmap', 'Position', [100, 100, 1000, 800]);
-    
-    % 绘制-log10(p值)热图
-    log_p_matrix = -log10(p_value_matrix);
-    h = heatmap(methods_with_pvalues, variables_all, log_p_matrix);
-    h.Title = '参数显著性热图 [-log10(p值)]';
-    h.XLabel = '方法';
-    h.YLabel = '变量';
-    
-    % 调整颜色映射
-    % 设置颜色范围，0表示p=1，3表示p=0.001
-    colormap(jet);
-    h.ColorLimits = [0, 4];  
-    
-    % 自定义单元格标签
-    h.CellLabelFormat = '%.2f';
-    
-    % 保存热图
-    save_figure(fig, figure_dir, 'parameter_significance_heatmap', 'Formats', {'svg'});
-    close(fig);
-    
-    % 创建显著性标记热图
-    fig2 = figure('Name', 'Parameter Significance Symbols', 'Position', [100, 100, 1000, 800]);
-    
-    % 自定义标记
-    sig_labels = cell(size(significance_matrix));
-    for i = 1:size(significance_matrix, 1)
-        for j = 1:size(significance_matrix, 2)
-            if significance_matrix(i, j) == 3
-                sig_labels{i, j} = '***';
-            elseif significance_matrix(i, j) == 2
-                sig_labels{i, j} = '**';
-            elseif significance_matrix(i, j) == 1
-                sig_labels{i, j} = '*';
-            else
-                sig_labels{i, j} = '';
-            end
-        end
-    end
-    
-    % 绘制显著性热图
-    h2 = heatmap(methods_with_pvalues, variables_all, significance_matrix, 'CellLabelColor', 'none');
-    h2.Title = '参数显著性标记热图';
-    h2.XLabel = '方法';
-    h2.YLabel = '变量';
-    
-    % 设置颜色映射
-    colormap(fig2, [1 1 1; 0.8 0.8 1; 0.6 0.6 1; 0.4 0.4 1]);
-    
-    % 添加显著性标记
-    h2.CellLabelFormat = '%s';
-    h2.CellLabelColor = 'black';
-    h2.ColorbarVisible = 'off';
-    
-    % 保存热图
-    save_figure(fig2, figure_dir, 'parameter_significance_symbols', 'Formats', {'svg'});
-    close(fig2);
+end
+
+% 如果没有收集到数据，则退出
+if isempty(cv_data) || isempty(valid_methods)
+    log_message('warning', '没有足够的系数稳定性数据来创建热力图');
+    return;
+end
+
+% 创建热力图
+fig = figure('Name', 'Parameter Stability Heatmap', 'Position', [100, 100, 1000, 800]);
+
+% 绘制热力图
+h = heatmap(valid_methods, all_vars, cv_data);
+
+% 设置热力图属性
+h.Title = '参数稳定性热力图 (变异系数 CV)';
+h.XLabel = '方法';
+h.YLabel = '变量';
+h.FontSize = 10;
+
+% 使用正确的格式化字符串
+% 注意：使用'%.2f'而不是'%0.2f'作为格式化字符串
+h.CellLabelFormat = '%.2f';
+
+% 设置颜色映射
+colormap(jet);
+caxis([0, 1]); % 设置色条范围
+
+% 添加颜色条
+c = colorbar;
+c.Label.String = '变异系数 (CV)';
+
+% 保存图形
+save_figure(fig, figure_dir, 'parameter_stability_heatmap', 'Formats', {'svg'});
+close(fig);
 end
 
 % 创建参数估计箱线图
@@ -3934,10 +4006,10 @@ function save_enhanced_results(results, var_names, group_means, cv_results, coef
     end
 
     % 创建参数显著性火山图（Volcano Plot）
-    figure_path = fullfile(figure_dir, 'parameter_volcano.svg');
+    figure_path = fullfile(figure_dir, 'parameter_significance_volcano.svg');
     if ~exist(figure_path, 'file')
         try
-            create_parameter_volcano_plot(param_stats, methods, figure_dir);
+            create_parameter_significance_volcano_plot(param_stats, methods, figure_dir);
             log_message('info', '参数显著性火山图（Volcano Plot）已保存');
         catch ME
             log_message('error', sprintf('创建参数显著性火山图（Volcano Plot）时出错: %s', ME.message));
@@ -3945,10 +4017,10 @@ function save_enhanced_results(results, var_names, group_means, cv_results, coef
     end
 
     % 创建各方法参数比较图
-    figure_path = fullfile(figure_dir, 'parameter_comparison.svg');
+    figure_path = fullfile(figure_dir, 'parameter_comparison_across_methods.svg');
     if ~exist(figure_path, 'file')
         try
-            create_parameter_comparison_plot(param_stats, methods, figure_dir);
+            create_parameter_comparison_across_methods_plot(param_stats, methods, figure_dir);
             log_message('info', '各方法参数比较图已保存');
         catch ME
             log_mesagge('error', sprintf('创建各方法参数比较图时出错: %s', ME.message));
@@ -4284,68 +4356,119 @@ end
 
 % 子函数1：雷达图
 function create_performance_radar_chart(results, methods, figure_dir)
-    % 创建性能指标雷达图
+% 创建性能指标雷达图
+% 输入:
+%   results - 结果结构
+%   methods - 方法名称
+%   figure_dir - 图形保存目录
+
+% 定义性能指标
+metrics = {'avg_accuracy', 'avg_precision', 'avg_sensitivity', 'avg_specificity', 'avg_f1_score', 'avg_auc'};
+metric_labels = {'准确率', '精确率', '敏感性', '特异性', 'F1分数', 'AUC'};
+n_metrics = length(metrics);
+
+% 收集性能数据
+perf_data = zeros(length(methods), n_metrics);
+for i = 1:length(methods)
+    method = methods{i};
     
-    % 提取指标数据
-    metrics = {'avg_accuracy', 'avg_sensitivity', 'avg_specificity', 'avg_precision', 'avg_f1_score', 'avg_auc'};
-    metric_labels = {'准确率', '敏感性', '特异性', '精确率', 'F1分数', 'AUC'};
-    n_metrics = length(metrics);
-    n_methods = length(methods);
-    
-    % 准备数据矩阵
-    data_matrix = zeros(n_methods, n_metrics);
-    for i = 1:n_methods
+    if isfield(results, method) && isfield(results.(method), 'performance')
         for j = 1:n_metrics
-            data_matrix(i, j) = results.(methods{i}).performance.(metrics{j});
+            metric = metrics{j};
+            if isfield(results.(method).performance, metric)
+                perf_data(i, j) = results.(method).performance.(metric);
+            else
+                perf_data(i, j) = 0;
+            end
         end
     end
+end
+
+% 创建图形
+fig = figure('Name', 'Performance Radar Chart', 'Position', [100, 100, 800, 800]);
+
+% 使用传统方法绘制雷达图，而不是使用极坐标轴
+% 计算角度
+theta = linspace(0, 2*pi, n_metrics+1);
+theta = theta(1:end-1); % 移除最后一个点，使其不重复
+
+% 绘制雷达图
+colors = lines(length(methods));
+line_styles = {'-', '--', ':', '-.', '-', '--', ':', '-.'};
+hold on;
+
+% 绘制背景网格(环)
+levels = [0.2, 0.4, 0.6, 0.8, 1.0];
+for l = 1:length(levels)
+    level = levels(l);
+    x_grid = level * cos(linspace(0, 2*pi, 100));
+    y_grid = level * sin(linspace(0, 2*pi, 100));
+    plot(x_grid, y_grid, 'Color', [0.8, 0.8, 0.8], 'LineWidth', 0.5);
     
-    % 创建雷达图
-    fig = figure('Name', 'Performance Radar Chart', 'Position', [100, 100, 900, 900]);
+    % 添加标签
+    text(0, level+0.02, sprintf('%.1f', level), 'HorizontalAlignment', 'center', 'FontSize', 8, 'Color', [0.5, 0.5, 0.5]);
+end
+
+% 绘制轴线
+for i = 1:n_metrics
+    line([0, cos(theta(i))], [0, sin(theta(i))], 'Color', [0.7, 0.7, 0.7], 'LineWidth', 1);
     
-    % 计算角度
-    angles = linspace(0, 2*pi, n_metrics + 1);
-    angles = angles(1:end-1);
+    % 添加轴标签
+    label_dist = 1.2; % 标签距离
+    text(label_dist*cos(theta(i)), label_dist*sin(theta(i)), metric_labels{i}, ...
+        'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle', 'FontSize', 10, 'FontWeight', 'bold');
+end
+
+% 绘制每个方法的性能
+legend_handles = [];
+for i = 1:length(methods)
+    % 准备数据点
+    r = perf_data(i, :);
     
-    % 设置颜色
-    colors = lines(n_methods);
+    % 计算坐标
+    x = r .* cos(theta);
+    y = r .* sin(theta);
     
-    % 设置坐标轴
-    ax = polaraxes;
-    hold(ax, 'on');
+    % 闭合多边形
+    x = [x, x(1)];
+    y = [y, y(1)];
     
-    % 绘制每种方法的雷达图
-    for i = 1:n_methods
-        values = data_matrix(i, :);
-        values = [values, values(1)]; % 闭合多边形
-        angles_plot = [angles, angles(1)];
-        
-        % 绘制多边形
-        plot(ax, angles_plot, values, '-o', 'LineWidth', 2, ...
-            'Color', colors(i,:), 'MarkerFaceColor', colors(i,:), ...
-            'MarkerSize', 8, 'DisplayName', methods{i});
-        
-        % 填充多边形
-        fill(ax, angles_plot, values, colors(i,:), 'FaceAlpha', 0.1);
+    % 绘制线
+    line_style = line_styles{mod(i-1, length(line_styles))+1};
+    h_line = plot(x, y, line_style, 'Color', colors(i,:), 'LineWidth', 2);
+    
+    % 绘制点
+    for j = 1:n_metrics
+        plot(r(j)*cos(theta(j)), r(j)*sin(theta(j)), 'o', 'MarkerSize', 6, ...
+            'MarkerFaceColor', colors(i,:), 'MarkerEdgeColor', 'none');
     end
     
-    % 设置雷达图属性
-    ax.ThetaTick = angles * 180 / pi;
-    ax.ThetaTickLabel = metric_labels;
-    ax.RLim = [0, 1];
-    ax.RTickLabel = {'0', '0.2', '0.4', '0.6', '0.8', '1.0'};
-    ax.GridLineStyle = '--';
-    ax.GridColor = [0.5, 0.5, 0.5];
+    % 添加到图例
+    legend_handles = [legend_handles, h_line];
     
-    % 添加图例
-    legend('Location', 'southoutside', 'Orientation', 'horizontal', 'NumColumns', 3);
+    % 计算多边形顶点
+    vertices_x = r .* cos(theta);
+    vertices_y = r .* sin(theta);
     
-    % 添加标题
-    title('不同方法的性能指标雷达图', 'FontSize', 16, 'FontWeight', 'bold');
-    
-    % 保存图形
-    save_figure(fig, figure_dir, 'performance_radar_chart', 'Formats', {'svg'});
-    close(fig);
+    % 绘制填充区域
+    pgon = polyshape(vertices_x, vertices_y);
+    h_fill = fill(pgon.Vertices(:,1), pgon.Vertices(:,2), colors(i,:), 'FaceAlpha', 0.2, 'EdgeColor', 'none');
+end
+
+% 设置坐标轴
+axis equal;
+axis([-1.3, 1.3, -1.3, 1.3]);
+axis off;
+
+% 添加标题
+title('性能指标雷达图', 'FontSize', 14, 'FontWeight', 'bold');
+
+% 添加图例
+legend(legend_handles, methods, 'Location', 'southoutside', 'Orientation', 'horizontal', 'FontSize', 10);
+
+% 保存图形
+save_figure(fig, figure_dir, 'performance_radar_chart', 'Formats', {'svg'});
+close(fig);
 end
 
 % 子函数2：性能热图

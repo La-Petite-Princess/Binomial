@@ -1010,6 +1010,85 @@ coverage = mean(sum(total_mask, 2) > 0);
 log_message('info', sprintf('数据覆盖率: %.2f%%', coverage * 100));
 end
 
+%% K折表现的可视化函数
+function create_kfold_performance_visualization(cv_results, figure_dir)
+% 创建K折交叉验证各折性能可视化
+% 输入:
+%   cv_results - 交叉验证结果
+%   figure_dir - 图形保存目录
+
+% 获取折数
+k = length(cv_results.accuracy);
+
+% 创建图形
+fig = figure('Name', 'K-Fold Performance by Fold', 'Position', [100, 100, 1200, 800]);
+
+% 准备数据
+metrics = {'accuracy', 'precision', 'recall', 'specificity', 'f1_score', 'auc'};
+metric_labels = {'准确率', '精确率', '召回率', '特异性', 'F1分数', 'AUC'};
+n_metrics = length(metrics);
+
+% 创建子图布局
+rows = 2;
+cols = 3;
+
+% 绘制每个指标的折线图
+for i = 1:n_metrics
+    metric = metrics{i};
+    metric_label = metric_labels{i};
+    
+    % 创建子图
+    subplot(rows, cols, i);
+    
+    % 获取数据
+    values = cv_results.(metric);
+    mean_val = cv_results.(['avg_' metric]);
+    std_val = cv_results.(['std_' metric]);
+    
+    % 绘制折线图
+    plot(1:k, values, 'o-', 'LineWidth', 1.5, 'Color', [0.3, 0.6, 0.8], 'MarkerFaceColor', [0.3, 0.6, 0.8]);
+    hold on;
+    
+    % 绘制均值线
+    plot([0.5, k+0.5], [mean_val, mean_val], 'r--', 'LineWidth', 1.5);
+    
+    % 绘制标准差区间
+    fill([1:k, fliplr(1:k)], [mean_val + std_val * ones(1, k), fliplr(mean_val - std_val * ones(1, k))], ...
+        [0.8, 0.8, 0.8], 'EdgeColor', 'none', 'FaceAlpha', 0.3);
+    
+    % 设置图形属性
+    xlabel('折数', 'FontSize', 10);
+    ylabel(metric_label, 'FontSize', 10);
+    title(sprintf('%s (均值=%.3f, 标准差=%.3f)', metric_label, mean_val, std_val), 'FontSize', 12);
+    grid on;
+    xlim([0.5, k+0.5]);
+    
+    % 调整Y轴范围
+    if strcmp(metric, 'auc') || strcmp(metric, 'f1_score')
+        ylim([0.5, 1]);
+    else
+        ylim([0, 1]);
+    end
+    
+    % 添加数据点标签
+    for j = 1:k
+        text(j, values(j) + 0.02, sprintf('%.3f', values(j)), ...
+            'HorizontalAlignment', 'center', 'FontSize', 7);
+    end
+    
+    % 添加图例
+    legend({'各折值', '均值', '标准差区间'}, 'Location', 'best', 'FontSize', 8);
+end
+
+% 添加总标题
+sgtitle(sprintf('K折交叉验证各折性能指标 (K=%d)', k), 'FontSize', 16, 'FontWeight', 'bold');
+set(gcf, 'Color', 'white');
+
+% 保存图形
+save_figure(fig, figure_dir, 'kfold_performance_by_fold', 'Formats', {'svg'});
+close(fig);
+end
+
 %% K折交叉验证函数 - 新增
 function results = k_fold_cross_validation(X, y, k, var_names)
 % 执行K折交叉验证来评估模型稳定性
@@ -2481,6 +2560,635 @@ lower = prctile(theta_boot, 100 * alpha_1_adj);
 upper = prctile(theta_boot, 100 * alpha_2_adj);
 end
 
+% 参数估计值及其置信区间的森林图（Forest Plot）
+function create_parameter_forest_plot(param_stats, methods, figure_dir)
+    % 为每种方法创建参数森林图
+    % 输入:
+    %   param_stats - 参数统计结果
+    %   methods - 方法名称
+    %   figure_dir - 图形保存目录
+    
+    for m = 1:length(methods)
+        method = methods{m};
+        
+        % 只处理有参数统计数据的回归类方法
+        if isfield(param_stats, method) && isfield(param_stats.(method), 'table')
+            table_data = param_stats.(method).table;
+            
+            % 提取数据
+            var_names = table_data.Variable;
+            estimates = table_data.Estimate;
+            
+            % 获取置信区间数据
+            % 注意：根据你的代码，可能需要调整列名
+            ci_lower = table_data.CI_Lower_t; % 或 table_data.CI_Lower_BCa
+            ci_upper = table_data.CI_Upper_t; % 或 table_data.CI_Upper_BCa
+            p_values = table_data.p_value;
+            
+            % 创建图形
+            fig = figure('Name', sprintf('%s Parameter Forest Plot', method), 'Position', [100, 100, 1000, 600]);
+            
+            % 按变量名排序（不包括截距）
+            [~, intercept_idx] = ismember('Intercept', var_names);
+            non_intercept_idx = setdiff(1:length(var_names), intercept_idx);
+            [sorted_names, sort_idx] = sort(var_names(non_intercept_idx));
+            
+            % 重排数据
+            plot_vars = [var_names(intercept_idx); sorted_names];
+            plot_estimates = [estimates(intercept_idx); estimates(non_intercept_idx(sort_idx))];
+            plot_ci_lower = [ci_lower(intercept_idx); ci_lower(non_intercept_idx(sort_idx))];
+            plot_ci_upper = [ci_upper(intercept_idx); ci_upper(non_intercept_idx(sort_idx))];
+            plot_p_values = [p_values(intercept_idx); p_values(non_intercept_idx(sort_idx))];
+            
+            % 绘制森林图
+            y_pos = length(plot_vars):-1:1;
+            
+            % 绘制估计值
+            scatter(plot_estimates, y_pos, 100, 'filled', 'MarkerFaceColor', 'b');
+            hold on;
+            
+            % 绘制置信区间
+            for i = 1:length(y_pos)
+                line([plot_ci_lower(i), plot_ci_upper(i)], [y_pos(i), y_pos(i)], 'LineWidth', 2, 'Color', 'b');
+                
+                % 为显著的参数添加标记
+                if plot_p_values(i) < 0.05
+                    text(plot_ci_upper(i) + 0.05, y_pos(i), '*', 'FontSize', 16, 'Color', 'r');
+                end
+            end
+            
+            % 添加零线
+            line([0, 0], [0, length(plot_vars)+1], 'LineStyle', '--', 'Color', 'k');
+            
+            % 设置图形属性
+            set(gca, 'YTick', y_pos, 'YTickLabel', plot_vars, 'FontSize', 10);
+            xlabel('参数估计值及95%置信区间', 'FontSize', 12, 'FontWeight', 'bold');
+            title(sprintf('%s方法的参数估计及置信区间', method), 'FontSize', 14, 'FontWeight', 'bold');
+            grid on;
+            
+            % 添加标注说明显著性
+            text(max(plot_ci_upper) + 0.1, 1, '* p < 0.05', 'FontSize', 10, 'Color', 'r');
+            
+            % 保存图形
+            save_figure(fig, figure_dir, sprintf('%s_parameter_forest_plot', method), 'Formats', {'svg'});
+            close(fig);
+        end
+    end
+end
+
+% 参数显著性火山图（Volcano Plot）
+function create_parameter_volcano_plot(param_stats, methods, figure_dir)
+    % 创建参数显著性火山图
+    % 输入:
+    %   param_stats - 参数统计结果
+    %   methods - 方法名称
+    %   figure_dir - 图形保存目录
+    
+    for m = 1:length(methods)
+        method = methods{m};
+        
+        % 只处理有参数统计数据的回归类方法
+        if isfield(param_stats, method) && isfield(param_stats.(method), 'table')
+            table_data = param_stats.(method).table;
+            
+            % 提取数据
+            var_names = table_data.Variable;
+            estimates = table_data.Estimate;
+            p_values = table_data.p_value;
+            
+            % 排除截距项
+            non_intercept_idx = ~strcmp(var_names, 'Intercept');
+            var_names = var_names(non_intercept_idx);
+            estimates = estimates(non_intercept_idx);
+            p_values = p_values(non_intercept_idx);
+            
+            % 创建图形
+            fig = figure('Name', sprintf('%s Parameter Volcano Plot', method), 'Position', [100, 100, 800, 600]);
+            
+            % 计算-log10(p-value)
+            log_p = -log10(p_values);
+            
+            % 绘制火山图
+            scatter(estimates, log_p, 100, abs(estimates), 'filled', 'MarkerFaceAlpha', 0.7);
+            
+            % 添加变量标签
+            text(estimates, log_p + 0.2, var_names, 'HorizontalAlignment', 'center', 'FontSize', 8);
+            
+            % 添加阈值线
+            hold on;
+            line([min(estimates)-0.2, max(estimates)+0.2], [-log10(0.05), -log10(0.05)], 'LineStyle', '--', 'Color', 'r');
+            
+            % 设置颜色映射
+            colormap(jet);
+            colorbar('Ticks', [], 'Label', '|参数估计值|');
+            
+            % 设置图形属性
+            xlabel('参数估计值', 'FontSize', 12, 'FontWeight', 'bold');
+            ylabel('-log10(p值)', 'FontSize', 12, 'FontWeight', 'bold');
+            title(sprintf('%s方法的参数火山图', method), 'FontSize', 14, 'FontWeight', 'bold');
+            grid on;
+            
+            % 添加文本说明
+            text(min(estimates), -log10(0.05) + 0.3, 'p = 0.05', 'Color', 'r', 'FontSize', 10);
+            
+            % 保存图形
+            save_figure(fig, figure_dir, sprintf('%s_parameter_volcano_plot', method), 'Formats', {'svg'});
+            close(fig);
+        end
+    end
+end
+
+% 各方法参数比较图
+function create_parameter_comparison_plot(param_stats, methods, figure_dir)
+    % 创建不同方法间的参数比较图
+    % 输入:
+    %   param_stats - 参数统计结果
+    %   methods - 方法名称
+    %   figure_dir - 图形保存目录
+    
+    % 收集所有方法中共有的变量
+    all_variables = {};
+    
+    for m = 1:length(methods)
+        method = methods{m};
+        if isfield(param_stats, method) && isfield(param_stats.(method), 'variables')
+            all_variables = union(all_variables, param_stats.(method).variables);
+        end
+    end
+    
+    % 移除"Intercept"，仅比较真实变量
+    all_variables = setdiff(all_variables, {'Intercept'});
+    
+    % 如果没有足够的变量或方法，则退出
+    if length(all_variables) < 2 || length(methods) < 2
+        log_message('warning', '变量或方法不足，无法创建比较图');
+        return;
+    end
+    
+    % 创建图形
+    fig = figure('Name', 'Parameter Comparison Across Methods', 'Position', [100, 100, 1200, 800]);
+    
+    % 为每个变量创建一个子图
+    num_vars = length(all_variables);
+    rows = ceil(sqrt(num_vars));
+    cols = ceil(num_vars / rows);
+    
+    % 设置颜色和标记
+    colors = lines(length(methods));
+    markers = {'o', 's', 'd', '^', 'v', '>', '<', 'p', 'h'};
+    
+    for v = 1:num_vars
+        var_name = all_variables{v};
+        
+        % 创建子图
+        subplot(rows, cols, v);
+        hold on;
+        
+        % 为每种方法绘制参数估计和置信区间
+        for m = 1:length(methods)
+            method = methods{m};
+            
+            % 检查该方法是否有此变量
+            if isfield(param_stats, method) && isfield(param_stats.(method), 'variables')
+                var_idx = find(strcmp(param_stats.(method).variables, var_name));
+                
+                if ~isempty(var_idx)
+                    est = param_stats.(method).mean(var_idx);
+                    ci_lower = param_stats.(method).t_ci_lower(var_idx);
+                    ci_upper = param_stats.(method).t_ci_upper(var_idx);
+                    
+                    % 绘制估计值
+                    color_idx = mod(m-1, size(colors, 1)) + 1;
+                    marker_idx = mod(m-1, length(markers)) + 1;
+                    
+                    % 绘制置信区间
+                    line([m, m], [ci_lower, ci_upper], 'LineWidth', 2, 'Color', colors(color_idx,:));
+                    
+                    % 绘制估计点
+                    scatter(m, est, 100, markers{marker_idx}, 'filled', ...
+                        'MarkerFaceColor', colors(color_idx,:), ...
+                        'MarkerEdgeColor', 'k');
+                    
+                    % 标记显著的参数
+                    if isfield(param_stats.(method), 'p_values') && ...
+                       param_stats.(method).p_values(var_idx) < 0.05
+                        text(m, ci_upper + 0.05, '*', 'FontSize', 16, 'Color', 'r', ...
+                            'HorizontalAlignment', 'center');
+                    end
+                end
+            end
+        end
+        
+        % 添加零线
+        line([0.5, length(methods)+0.5], [0, 0], 'LineStyle', '--', 'Color', 'k');
+        
+        % 设置图形属性
+        set(gca, 'XTick', 1:length(methods), 'XTickLabel', methods, 'XTickLabelRotation', 45);
+        title(var_name, 'FontSize', 12);
+        grid on;
+        
+        % 调整y轴范围
+        y_limits = ylim;
+        y_range = y_limits(2) - y_limits(1);
+        ylim([y_limits(1) - 0.1*y_range, y_limits(2) + 0.1*y_range]);
+    end
+    
+    % 添加公共标题
+    sgtitle('不同方法间的参数比较', 'FontSize', 16, 'FontWeight', 'bold');
+    
+    % 添加共享y轴标签
+    annotation('textbox', [0.03, 0.5, 0.05, 0.02], 'String', '参数估计值', ...
+        'EdgeColor', 'none', 'FontSize', 12, 'FontWeight', 'bold', 'Rotation', 90, ...
+        'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
+    
+    % 保存图形
+    save_figure(fig, figure_dir, 'parameter_comparison_across_methods', 'Formats', {'svg'});
+    close(fig);
+end
+
+% 参数置信区间比较图
+function create_confidence_interval_comparison(param_stats, methods, figure_dir)
+    % 创建参数置信区间比较图（t分布vs BCa方法）
+    % 输入:
+    %   param_stats - 参数统计结果
+    %   methods - 方法名称
+    %   figure_dir - 图形保存目录
+    
+    for m = 1:length(methods)
+        method = methods{m};
+        
+        % 只处理有参数统计数据的回归类方法
+        if isfield(param_stats, method) && ...
+           isfield(param_stats.(method), 't_ci_lower') && ...
+           isfield(param_stats.(method), 'bca_ci_lower')
+            
+            % 提取数据
+            variables = param_stats.(method).variables;
+            t_ci_lower = param_stats.(method).t_ci_lower;
+            t_ci_upper = param_stats.(method).t_ci_upper;
+            bca_ci_lower = param_stats.(method).bca_ci_lower;
+            bca_ci_upper = param_stats.(method).bca_ci_upper;
+            
+            % 创建图形
+            fig = figure('Name', sprintf('%s CI Comparison', method), 'Position', [100, 100, 1200, 600]);
+            
+            % 左侧：t分布置信区间
+            subplot(1, 2, 1);
+            for i = 1:length(variables)
+                y_pos = length(variables) - i + 1;
+                line([t_ci_lower(i), t_ci_upper(i)], [y_pos, y_pos], 'LineWidth', 2, 'Color', 'b');
+                hold on;
+                scatter(param_stats.(method).mean(i), y_pos, 80, 'filled', 'MarkerFaceColor', 'b');
+            end
+            
+            % 设置图形属性
+            set(gca, 'YTick', 1:length(variables), 'YTickLabel', flip(variables), 'FontSize', 10);
+            xlabel('参数估计值', 'FontSize', 12, 'FontWeight', 'bold');
+            title(sprintf('%s: t分布95%%置信区间', method), 'FontSize', 14, 'FontWeight', 'bold');
+            grid on;
+            line([0, 0], [0, length(variables)+1], 'LineStyle', '--', 'Color', 'k');
+            
+            % 右侧：BCa置信区间
+            subplot(1, 2, 2);
+            for i = 1:length(variables)
+                y_pos = length(variables) - i + 1;
+                line([bca_ci_lower(i), bca_ci_upper(i)], [y_pos, y_pos], 'LineWidth', 2, 'Color', 'r');
+                hold on;
+                scatter(param_stats.(method).mean(i), y_pos, 80, 'filled', 'MarkerFaceColor', 'r');
+            end
+            
+            % 设置图形属性
+            set(gca, 'YTick', 1:length(variables), 'YTickLabel', flip(variables), 'FontSize', 10);
+            xlabel('参数估计值', 'FontSize', 12, 'FontWeight', 'bold');
+            title(sprintf('%s: BCa 95%%置信区间', method), 'FontSize', 14, 'FontWeight', 'bold');
+            grid on;
+            line([0, 0], [0, length(variables)+1], 'LineStyle', '--', 'Color', 'k');
+            
+            % 保存图形
+            save_figure(fig, figure_dir, sprintf('%s_ci_comparison', method), 'Formats', {'svg'});
+            close(fig);
+        end
+    end
+end
+
+% 参数稳定性热图
+function create_parameter_stability_heatmap(param_stats, methods, figure_dir)
+    % 创建参数稳定性热图
+    % 输入:
+    %   param_stats - 参数统计结果
+    %   methods - 方法名称
+    %   figure_dir - 图形保存目录
+    
+    % 收集具有p值的方法
+    methods_with_pvalues = {};
+    variables_all = {};
+    
+    for m = 1:length(methods)
+        method = methods{m};
+        if isfield(param_stats, method) && isfield(param_stats.(method), 'p_values')
+            methods_with_pvalues{end+1} = method;
+            variables_all = union(variables_all, param_stats.(method).variables);
+        end
+    end
+    
+    % 如果没有足够的数据，退出
+    if length(methods_with_pvalues) < 1 || length(variables_all) < 1
+        return;
+    end
+    
+    % 创建p值矩阵
+    p_value_matrix = NaN(length(variables_all), length(methods_with_pvalues));
+    significance_matrix = zeros(length(variables_all), length(methods_with_pvalues));
+    
+    for m = 1:length(methods_with_pvalues)
+        method = methods_with_pvalues{m};
+        method_vars = param_stats.(method).variables;
+        
+        for v = 1:length(variables_all)
+            var_name = variables_all{v};
+            var_idx = find(strcmp(method_vars, var_name));
+            
+            if ~isempty(var_idx)
+                p_val = param_stats.(method).p_values(var_idx);
+                p_value_matrix(v, m) = p_val;
+                
+                % 设置显著性级别
+                if p_val < 0.001
+                    significance_matrix(v, m) = 3;  % ***
+                elseif p_val < 0.01
+                    significance_matrix(v, m) = 2;  % **
+                elseif p_val < 0.05
+                    significance_matrix(v, m) = 1;  % *
+                else
+                    significance_matrix(v, m) = 0;  % 不显著
+                end
+            end
+        end
+    end
+    
+    % 创建热图
+    fig = figure('Name', 'Parameter Significance Heatmap', 'Position', [100, 100, 1000, 800]);
+    
+    % 绘制-log10(p值)热图
+    log_p_matrix = -log10(p_value_matrix);
+    h = heatmap(methods_with_pvalues, variables_all, log_p_matrix);
+    h.Title = '参数显著性热图 [-log10(p值)]';
+    h.XLabel = '方法';
+    h.YLabel = '变量';
+    
+    % 调整颜色映射
+    % 设置颜色范围，0表示p=1，3表示p=0.001
+    colormap(jet);
+    h.ColorLimits = [0, 4];  
+    
+    % 自定义单元格标签
+    h.CellLabelFormat = '%.2f';
+    
+    % 保存热图
+    save_figure(fig, figure_dir, 'parameter_significance_heatmap', 'Formats', {'svg'});
+    close(fig);
+    
+    % 创建显著性标记热图
+    fig2 = figure('Name', 'Parameter Significance Symbols', 'Position', [100, 100, 1000, 800]);
+    
+    % 自定义标记
+    sig_labels = cell(size(significance_matrix));
+    for i = 1:size(significance_matrix, 1)
+        for j = 1:size(significance_matrix, 2)
+            if significance_matrix(i, j) == 3
+                sig_labels{i, j} = '***';
+            elseif significance_matrix(i, j) == 2
+                sig_labels{i, j} = '**';
+            elseif significance_matrix(i, j) == 1
+                sig_labels{i, j} = '*';
+            else
+                sig_labels{i, j} = '';
+            end
+        end
+    end
+    
+    % 绘制显著性热图
+    h2 = heatmap(methods_with_pvalues, variables_all, significance_matrix, 'CellLabelColor', 'none');
+    h2.Title = '参数显著性标记热图';
+    h2.XLabel = '方法';
+    h2.YLabel = '变量';
+    
+    % 设置颜色映射
+    colormap(fig2, [1 1 1; 0.8 0.8 1; 0.6 0.6 1; 0.4 0.4 1]);
+    
+    % 添加显著性标记
+    h2.CellLabelFormat = '%s';
+    h2.CellLabelColor = 'black';
+    h2.ColorbarVisible = 'off';
+    
+    % 保存热图
+    save_figure(fig2, figure_dir, 'parameter_significance_symbols', 'Formats', {'svg'});
+    close(fig2);
+end
+
+% 创建参数估计箱线图
+function create_parameter_boxplot(param_stats, methods, figure_dir)
+    % 创建参数估计箱线图
+    % 输入:
+    %   param_stats - 参数统计结果
+    %   methods - 方法名称
+    %   figure_dir - 图形保存目录
+    
+    % 1. 方法间比较：为每个参数创建箱线图比较不同方法
+    create_methods_comparison_boxplot(param_stats, methods, figure_dir);
+    
+    % 2. 参数稳定性比较：为每个方法创建所有参数的稳定性箱线图
+    create_parameter_stability_boxplot(param_stats, methods, figure_dir);
+end
+
+function create_methods_comparison_boxplot(param_stats, methods, figure_dir)
+    % 收集所有方法中共有的变量
+    common_vars = {};
+    all_variables = {};
+    
+    % 收集所有变量
+    for m = 1:length(methods)
+        method = methods{m};
+        if isfield(param_stats, method) && isfield(param_stats.(method), 'all_coefs')
+            all_variables = union(all_variables, param_stats.(method).variables);
+        end
+    end
+    
+    % 找出所有方法都有的变量（交集）
+    if ~isempty(all_variables)
+        common_vars = all_variables;
+        for m = 1:length(methods)
+            method = methods{m};
+            if isfield(param_stats, method) && isfield(param_stats.(method), 'variables')
+                common_vars = intersect(common_vars, param_stats.(method).variables);
+            end
+        end
+    end
+    
+    % 如果没有共有变量，退出
+    if isempty(common_vars)
+        log_message('warning', '没有找到所有方法共有的变量，无法创建方法比较箱线图');
+        return;
+    end
+    
+    % 为每个共有变量创建方法比较箱线图
+    for v = 1:length(common_vars)
+        var_name = common_vars{v};
+        
+        % 收集不同方法对该变量的参数估计
+        param_values = cell(length(methods), 1);
+        method_names = cell(length(methods), 1);
+        valid_methods = 0;
+        
+        for m = 1:length(methods)
+            method = methods{m};
+            
+            if isfield(param_stats, method) && isfield(param_stats.(method), 'all_coefs')
+                var_idx = find(strcmp(param_stats.(method).variables, var_name));
+                
+                if ~isempty(var_idx) && isfield(param_stats.(method), 'all_coefs')
+                    % 收集所有模型中该变量的系数估计
+                    all_coefs = param_stats.(method).all_coefs;
+                    coef_values = [];
+                    
+                    % 从所有模型中提取该变量的参数值
+                    for i = 1:length(all_coefs)
+                        if length(all_coefs{i}) >= var_idx
+                            coef_values(end+1) = all_coefs{i}(var_idx);
+                        end
+                    end
+                    
+                    if ~isempty(coef_values)
+                        valid_methods = valid_methods + 1;
+                        param_values{valid_methods} = coef_values;
+                        method_names{valid_methods} = method;
+                    end
+                end
+            end
+        end
+        
+        % 调整数组大小以匹配有效方法数量
+        param_values = param_values(1:valid_methods);
+        method_names = method_names(1:valid_methods);
+        
+        % 如果至少有两种方法有该变量，创建箱线图
+        if valid_methods >= 2
+            fig = figure('Name', sprintf('Parameter Boxplot - %s', var_name), 'Position', [100, 100, 800, 600]);
+            
+            % 创建箱线图
+            boxplot(cell2mat(param_values'), 'Labels', method_names, 'Notch', 'on');
+            
+            % 设置图形属性
+            title(sprintf('变量 "%s" 在不同方法下的参数估计分布', var_name), 'FontSize', 14, 'FontWeight', 'bold');
+            xlabel('方法', 'FontSize', 12);
+            ylabel('参数估计值', 'FontSize', 12);
+            grid on;
+            
+            % 添加零线
+            hold on;
+            line([0, valid_methods+1], [0, 0], 'LineStyle', '--', 'Color', 'k');
+            
+            % 保存图形
+            save_figure(fig, figure_dir, sprintf('parameter_boxplot_%s', strrep(var_name, ' ', '_')), 'Formats', {'svg'});
+            close(fig);
+        end
+    end
+end
+
+function create_parameter_stability_boxplot(param_stats, methods, figure_dir)
+    % 为每个方法创建参数稳定性箱线图
+    for m = 1:length(methods)
+        method = methods{m};
+        
+        if isfield(param_stats, method) && isfield(param_stats.(method), 'all_coefs') && ...
+           isfield(param_stats.(method), 'variables')
+            
+            variables = param_stats.(method).variables;
+            all_coefs = param_stats.(method).all_coefs;
+            
+            % 提取每个变量在所有模型中的系数值
+            param_matrix = [];
+            for i = 1:length(all_coefs)
+                if length(all_coefs{i}) >= length(variables)
+                    param_matrix = [param_matrix; all_coefs{i}(1:length(variables))'];
+                end
+            end
+            
+            if ~isempty(param_matrix) && size(param_matrix, 1) >= 5  % 至少需要5个样本
+                fig = figure('Name', sprintf('%s Parameter Stability', method), 'Position', [100, 100, 1000, 600]);
+                
+                % 创建箱线图
+                boxplot(param_matrix, 'Labels', variables, 'Notch', 'on');
+                
+                % 设置图形属性
+                title(sprintf('%s方法的参数稳定性分析', method), 'FontSize', 14, 'FontWeight', 'bold');
+                xlabel('参数', 'FontSize', 12);
+                ylabel('估计值', 'FontSize', 12);
+                xtickangle(45);  % 倾斜变量名称以免重叠
+                grid on;
+                
+                % 添加零线
+                hold on;
+                line([0, length(variables)+1], [0, 0], 'LineStyle', '--', 'Color', 'k');
+                
+                % 标记显著参数
+                for i = 1:length(variables)
+                    if isfield(param_stats.(method), 'p_values') && ...
+                       param_stats.(method).p_values(i) < 0.05
+                        text(i, max(param_matrix(:,i))*1.1, '*', 'FontSize', 16, 'Color', 'r', ...
+                            'HorizontalAlignment', 'center');
+                    end
+                end
+                
+                % 计算变异系数并添加到图上
+                cv_values = std(param_matrix) ./ abs(mean(param_matrix));
+                for i = 1:length(variables)
+                    if ~isinf(cv_values(i)) && ~isnan(cv_values(i))
+                        text(i, min(param_matrix(:,i))*1.1, sprintf('CV=%.2f', cv_values(i)), ...
+                            'FontSize', 8, 'HorizontalAlignment', 'center');
+                    end
+                end
+                
+                % 保存图形
+                save_figure(fig, figure_dir, sprintf('%s_parameter_stability', method), 'Formats', {'svg'});
+                close(fig);
+                
+                % 创建变异系数条形图
+                fig2 = figure('Name', sprintf('%s CV Barplot', method), 'Position', [100, 100, 900, 500]);
+                
+                % 排除无效或无限的变异系数
+                valid_idx = ~isinf(cv_values) & ~isnan(cv_values);
+                valid_cv = cv_values(valid_idx);
+                valid_vars = variables(valid_idx);
+                
+                % 按变异系数排序
+                [sorted_cv, sort_idx] = sort(valid_cv, 'descend');
+                sorted_vars = valid_vars(sort_idx);
+                
+                % 创建条形图
+                barh(sorted_cv);
+                
+                % 设置图形属性
+                set(gca, 'YTick', 1:length(sorted_vars), 'YTickLabel', sorted_vars);
+                xlabel('变异系数 (CV)', 'FontSize', 12);
+                title(sprintf('%s方法的参数稳定性 (变异系数)', method), 'FontSize', 14, 'FontWeight', 'bold');
+                grid on;
+                
+                % 添加参考线
+                hold on;
+                line([0.5, 0.5], [0, length(sorted_vars)+1], 'LineStyle', '--', 'Color', 'r');
+                text(0.51, 1, '不稳定阈值 (CV>0.5)', 'Color', 'r', 'FontSize', 10);
+                
+                % 保存图形
+                save_figure(fig2, figure_dir, sprintf('%s_parameter_cv', method), 'Formats', {'svg'});
+                close(fig2);
+            else
+                log_message('warning', sprintf('%s方法没有足够的样本来创建参数稳定性箱线图', method));
+            end
+        end
+    end
+end
+
 %% 评估变量贡献函数 - 新增
 function var_contribution = evaluate_variable_contribution(X, y, results, methods, var_names)
 % 评估每个变量对模型的贡献
@@ -2959,12 +3667,22 @@ function save_enhanced_results(results, var_names, group_means, cv_results, coef
     % 创建模型性能表（增强版，包括均值和标准差）
     file_path = fullfile(csv_dir, 'model_performance_detailed.csv');
     if ~exist(file_path, 'file')
+        % 创建详细性能表（现有代码）
         try
             perf_detail_table = create_performance_detail_table(results, methods);
-            writetable(perf_detail_table, file_path);
+            writetable(perf_detail_table, fullfile(csv_dir, 'model_performance_detailed.csv'));
             log_message('info', '详细模型性能表已保存');
         catch ME
             log_message('error', sprintf('创建详细模型性能表时出错: %s', ME.message));
+        end
+        
+        % 创建增强性能表（新增代码）
+        try
+            enhanced_perf_table = create_enhanced_performance_table(results, methods);
+            writetable(enhanced_perf_table, fullfile(csv_dir, 'model_performance_enhanced.csv'));
+            log_message('info', '增强模型性能表已保存');
+        catch ME
+            log_message('error', sprintf('创建增强模型性能表时出错: %s', ME.message));
         end
     end
     
@@ -3204,6 +3922,127 @@ function save_enhanced_results(results, var_names, group_means, cv_results, coef
         end
     end
     
+    % 创建参数估计值及其置信区间森林图（Forest Plot）
+    figure_path = fullfile(figure_dir, 'parameter_forest.svg');
+    if ~exist(figure_path, 'file')
+        try
+            create_parameter_forest_plot(param_stats, methods, figure_dir);
+            log_message('info', '参数估计值及其置信区间森林图（Forest Plot）已保存');
+        catch ME
+            log_message('error', sprintf('创建参数估计值及其置信区间森林图（Forest Plot）时出错: %s', ME.message));
+        end
+    end
+
+    % 创建参数显著性火山图（Volcano Plot）
+    figure_path = fullfile(figure_dir, 'parameter_volcano.svg');
+    if ~exist(figure_path, 'file')
+        try
+            create_parameter_volcano_plot(param_stats, methods, figure_dir);
+            log_message('info', '参数显著性火山图（Volcano Plot）已保存');
+        catch ME
+            log_message('error', sprintf('创建参数显著性火山图（Volcano Plot）时出错: %s', ME.message));
+        end
+    end
+
+    % 创建各方法参数比较图
+    figure_path = fullfile(figure_dir, 'parameter_comparison.svg');
+    if ~exist(figure_path, 'file')
+        try
+            create_parameter_comparison_plot(param_stats, methods, figure_dir);
+            log_message('info', '各方法参数比较图已保存');
+        catch ME
+            log_mesagge('error', sprintf('创建各方法参数比较图时出错: %s', ME.message));
+        end
+    end
+
+    % 创建参数置信区间比较图
+    figure_path = fullfile(figure_dir, 'confidence_interval_comparison.svg');
+    if ~exist(figure_path, 'file')
+        try
+            create_confidence_interval_comparison(param_stats, methods, figure_dir);
+            log_message('info', '参数置信区间比较图已保存');
+        catch ME
+            log_message('error', sprintf('创建参数置信区间比较图时出错: %s', ME.message));
+        end
+    end
+
+    % 创建参数稳定性热图
+    figure_path = fullfile(figure_dir, 'parameter_stability_heatmap.svg');
+    if ~exist(figure_path, 'file')
+        try
+            create_parameter_stability_heatmap(param_stats, methods, figure_dir);
+            log_message('info', '参数稳定性热力图已保存');
+        catch ME
+            log_message('error', sprintf('创建参数稳定性热力图时出错: %s', ME.message));
+        end
+    end
+
+    % 创建参数估计箱线图
+    figure_path = fullfile(figure_dir, 'parameter_boxplot.svg');
+    if ~exist(figure_path, 'file')
+        try
+            create_parameter_boxplot(param_stats, methods, figure_dir);
+            log_message('info', '参数统计箱线图已保存');
+        catch ME
+            log_message('error', sprintf('创建参数统计箱线图时出错: %s', ME.message));
+        end
+    end
+
+    % 创建性能指标雷达图
+    figure_path = fullfile(figure_dir, 'performance_radar.svg');
+    if ~exist(figure_path, 'file')
+        try
+            create_performance_radar_chart(results, methods, figure_dir);
+            log_message('info', '增性能指标雷达图已保存');
+        catch ME
+            log_message('error', sprintf('创建性能指标雷达图时出错: %s', ME.message));
+        end
+    end
+
+    % 创建性能指标热图
+    figure_path = fullfile(figure_dir, 'performance_heatmap.svg');
+    if ~exist(figure_path, 'file')
+        try
+            create_performance_heatmap(results, methods, figure_dir);
+            log_message('info', '性能指标热图已保存');
+        catch ME
+            log_message('error', sprintf('创建性能指标热图时出错: %s', ME.message));
+        end
+    end
+
+    % 创建性能指标对比条形图
+    figure_path = fullfile(figure_dir, 'performance_barplot_comparison.svg');
+    if ~exist(figure_path, 'file')
+        try
+            create_performance_barplot_comparison(results, methods, figure_dir);
+            log_message('info', '性能指标对比条形图已保存');
+        catch ME
+            log_message('error', sprintf('创建性能指标对比条形图时出错: %s', ME.message));
+        end
+    end
+
+    % 创建性能指标箱线图
+    figure_path = fullfile(figure_dir, 'performance_distribution.svg');
+    if ~exist(figure_path, 'file')
+        try
+            create_performance_distribution_plot(results, methods, figure_dir);
+            log_message('info', '性能指标箱线图已保存');
+        catch ME
+            log_message('error', sprintf('创建性能指标箱线图时出错: %s', ME.message));
+        end
+    end
+
+    % 创建综合性能评分图
+    figure_path = fullfile(figure_dir, 'comprehensive_performance.svg');
+    if ~exist(figure_path, 'file')
+        try
+            create_comprehensive_performance_plot(results, methods, figure_dir);
+            log_message('info', '综合性能评分图已保存');
+        catch ME
+            log_message('error', sprintf('创建综合性能评分图时出错: %s', ME.message));
+        end
+    end
+
     %% 3. 创建综合比较报告
     report_path = fullfile(report_dir, 'enhanced_summary_report.txt');
     if ~exist(report_path, 'file')
@@ -3341,7 +4180,7 @@ f1_col = find(strcmp(table_vars, 'F1_Score_Mean'));
 perf_detail_table = sortrows(perf_detail_table, f1_col, 'descend');
 end
 
-%% 创建变量频率表 - 修复版
+% 辅助函数：创建变量频率表 - 修复版
 function var_freq_table = create_var_freq_table(results, methods, var_names)
 % 创建变量选择频率表
 % 输入:
@@ -3402,7 +4241,7 @@ var_freq_table.Average = avg_vals;
 var_freq_table = sortrows(var_freq_table, 'Average', 'descend');
 end
 
-%% 创建增强性能表 - 新增
+% 辅助函数：创建增强性能表 - 新增
 function perf_table = create_enhanced_performance_table(results, methods)
 % 创建增强模型性能表，包含更多评估指标
 % 输入:
@@ -3443,7 +4282,325 @@ end
 perf_table = sortrows(perf_table, 'F1_Score', 'descend');
 end
 
-%% 创建交叉验证结果表 - 新增
+% 子函数1：雷达图
+function create_performance_radar_chart(results, methods, figure_dir)
+    % 创建性能指标雷达图
+    
+    % 提取指标数据
+    metrics = {'avg_accuracy', 'avg_sensitivity', 'avg_specificity', 'avg_precision', 'avg_f1_score', 'avg_auc'};
+    metric_labels = {'准确率', '敏感性', '特异性', '精确率', 'F1分数', 'AUC'};
+    n_metrics = length(metrics);
+    n_methods = length(methods);
+    
+    % 准备数据矩阵
+    data_matrix = zeros(n_methods, n_metrics);
+    for i = 1:n_methods
+        for j = 1:n_metrics
+            data_matrix(i, j) = results.(methods{i}).performance.(metrics{j});
+        end
+    end
+    
+    % 创建雷达图
+    fig = figure('Name', 'Performance Radar Chart', 'Position', [100, 100, 900, 900]);
+    
+    % 计算角度
+    angles = linspace(0, 2*pi, n_metrics + 1);
+    angles = angles(1:end-1);
+    
+    % 设置颜色
+    colors = lines(n_methods);
+    
+    % 设置坐标轴
+    ax = polaraxes;
+    hold(ax, 'on');
+    
+    % 绘制每种方法的雷达图
+    for i = 1:n_methods
+        values = data_matrix(i, :);
+        values = [values, values(1)]; % 闭合多边形
+        angles_plot = [angles, angles(1)];
+        
+        % 绘制多边形
+        plot(ax, angles_plot, values, '-o', 'LineWidth', 2, ...
+            'Color', colors(i,:), 'MarkerFaceColor', colors(i,:), ...
+            'MarkerSize', 8, 'DisplayName', methods{i});
+        
+        % 填充多边形
+        fill(ax, angles_plot, values, colors(i,:), 'FaceAlpha', 0.1);
+    end
+    
+    % 设置雷达图属性
+    ax.ThetaTick = angles * 180 / pi;
+    ax.ThetaTickLabel = metric_labels;
+    ax.RLim = [0, 1];
+    ax.RTickLabel = {'0', '0.2', '0.4', '0.6', '0.8', '1.0'};
+    ax.GridLineStyle = '--';
+    ax.GridColor = [0.5, 0.5, 0.5];
+    
+    % 添加图例
+    legend('Location', 'southoutside', 'Orientation', 'horizontal', 'NumColumns', 3);
+    
+    % 添加标题
+    title('不同方法的性能指标雷达图', 'FontSize', 16, 'FontWeight', 'bold');
+    
+    % 保存图形
+    save_figure(fig, figure_dir, 'performance_radar_chart', 'Formats', {'svg'});
+    close(fig);
+end
+
+% 子函数2：性能热图
+function create_performance_heatmap(results, methods, figure_dir)
+    % 创建性能指标热图
+    
+    % 准备数据
+    metrics = {'avg_accuracy', 'avg_sensitivity', 'avg_specificity', 'avg_precision', 'avg_f1_score', 'avg_auc'};
+    metric_labels = {'准确率', '敏感性', '特异性', '精确率', 'F1分数', 'AUC'};
+    
+    % 构建数据矩阵
+    data_matrix = zeros(length(methods), length(metrics));
+    for i = 1:length(methods)
+        for j = 1:length(metrics)
+            data_matrix(i, j) = results.(methods{i}).performance.(metrics{j});
+        end
+    end
+    
+    % 创建热图
+    fig = figure('Name', 'Performance Heatmap', 'Position', [100, 100, 1000, 600]);
+    
+    % 绘制热图
+    h = heatmap(metric_labels, methods, data_matrix);
+    h.Title = '各方法性能指标热图';
+    h.XLabel = '性能指标';
+    h.YLabel = '方法';
+    h.ColorbarVisible = 'on';
+    h.FontSize = 12;
+    
+    % 设置颜色映射
+    colormap(jet);
+    h.ColorLimits = [0, 1];
+    
+    % 格式化数值显示
+    h.CellLabelFormat = '%.3f';
+    
+    % 保存图形
+    save_figure(fig, figure_dir, 'performance_heatmap', 'Formats', {'svg'});
+    close(fig);
+end
+
+% 子函数3：条形图对比
+function create_performance_barplot_comparison(results, methods, figure_dir)
+    % 创建性能指标条形图对比
+    
+    % 准备数据
+    metrics = {'avg_accuracy', 'avg_sensitivity', 'avg_specificity', 'avg_precision', 'avg_f1_score', 'avg_auc'};
+    metric_labels = {'准确率', '敏感性', '特异性', '精确率', 'F1分数', 'AUC'};
+    
+    % 构建数据矩阵
+    data_matrix = zeros(length(metrics), length(methods));
+    error_matrix = zeros(length(metrics), length(methods));
+    
+    for i = 1:length(metrics)
+        for j = 1:length(methods)
+            data_matrix(i, j) = results.(methods{j}).performance.(metrics{i});
+            % 获取标准差
+            std_metric = strrep(metrics{i}, 'avg_', 'std_');
+            if isfield(results.(methods{j}).performance, std_metric)
+                error_matrix(i, j) = results.(methods{j}).performance.(std_metric);
+            end
+        end
+    end
+    
+    % 创建图形
+    fig = figure('Name', 'Performance Barplot Comparison', 'Position', [100, 100, 1200, 700]);
+    
+    % 创建分组条形图
+    bar_handle = bar(data_matrix);
+    hold on;
+    
+    % 添加误差线
+    num_groups = size(data_matrix, 1);
+    num_bars = size(data_matrix, 2);
+    group_width = min(0.8, num_bars / (num_bars + 1.5));
+    
+    for i = 1:num_bars
+        x = (1:num_groups) + (i - (num_bars + 1) / 2) * group_width / num_bars;
+        errorbar(x, data_matrix(:, i), error_matrix(:, i), 'k', 'LineStyle', 'none');
+    end
+    
+    % 设置图形属性
+    set(gca, 'XTick', 1:length(metric_labels), 'XTickLabel', metric_labels, 'XTickLabelRotation', 45);
+    ylabel('性能值', 'FontSize', 12);
+    title('不同方法的性能指标对比', 'FontSize', 16, 'FontWeight', 'bold');
+    ylim([0, 1]);
+    grid on;
+    
+    % 添加图例
+    legend(methods, 'Location', 'northeast');
+    
+    % 保存图形
+    save_figure(fig, figure_dir, 'performance_barplot_comparison', 'Formats', {'svg'});
+    close(fig);
+end
+
+% 子函数4：性能分布图
+function create_performance_distribution_plot(results, methods, figure_dir)
+    % 创建性能指标分布图
+    
+    metrics = {'accuracy', 'sensitivity', 'specificity', 'precision', 'f1_score', 'auc'};
+    metric_labels = {'准确率', '敏感性', '特异性', '精确率', 'F1分数', 'AUC'};
+    
+    for m = 1:length(metrics)
+        metric = metrics{m};
+        
+        % 收集所有方法在该指标上的分布数据
+        all_data = [];
+        group_labels = [];
+        
+        for i = 1:length(methods)
+            method = methods{i};
+            if isfield(results.(method).performance, metric)
+                data = results.(method).performance.(metric);
+                all_data = [all_data; data];
+                group_labels = [group_labels; repmat({method}, length(data), 1)];
+            end
+        end
+        
+        if ~isempty(all_data)
+            % 创建单独的图形
+            fig = figure('Name', sprintf('Distribution - %s', metric_labels{m}), 'Position', [100, 100, 800, 600]);
+            
+            % 创建箱线图
+            boxplot(all_data, group_labels, 'Notch', 'on');
+            
+            % 设置图形属性
+            title(sprintf('%s分布对比', metric_labels{m}), 'FontSize', 16, 'FontWeight', 'bold');
+            ylabel(metric_labels{m}, 'FontSize', 12);
+            xlabel('方法', 'FontSize', 12);
+            grid on;
+            
+            % 添加均值点
+            hold on;
+            method_unique = unique(group_labels);
+            x_pos = 1:length(method_unique);
+            mean_values = zeros(length(method_unique), 1);
+            
+            for i = 1:length(method_unique)
+                idx = strcmp(group_labels, method_unique{i});
+                mean_values(i) = mean(all_data(idx));
+            end
+            
+            scatter(x_pos, mean_values, 100, 'r', 'filled', 'Marker', 'd');
+            
+            % 添加总体均值线
+            overall_mean = mean(all_data);
+            line([0.5, length(method_unique)+0.5], [overall_mean, overall_mean], ...
+                'LineStyle', '--', 'Color', 'k', 'LineWidth', 1.5);
+            text(length(method_unique)+0.5, overall_mean, sprintf(' 均值: %.3f', overall_mean), ...
+                'VerticalAlignment', 'middle', 'FontSize', 10);
+            
+            % 保存图形
+            save_figure(fig, figure_dir, sprintf('distribution_%s', metric), 'Formats', {'svg'});
+            close(fig);
+        end
+    end
+end
+
+% 子函数5：综合性能评分图
+function create_comprehensive_performance_plot(results, methods, figure_dir)
+    % 创建综合性能评分图
+    
+    % 定义权重（可根据需要调整）
+    weights = struct();
+    weights.accuracy = 0.15;
+    weights.sensitivity = 0.2;  % 召回率通常更重要
+    weights.specificity = 0.15;
+    weights.precision = 0.2;
+    weights.f1_score = 0.2;
+    weights.auc = 0.1;
+    
+    % 计算综合评分
+    comprehensive_scores = zeros(length(methods), 1);
+    metric_contributions = zeros(length(methods), 6);
+    
+    metrics = {'avg_accuracy', 'avg_sensitivity', 'avg_specificity', 'avg_precision', 'avg_f1_score', 'avg_auc'};
+    metric_labels = {'准确率', '敏感性', '特异性', '精确率', 'F1分数', 'AUC'};
+    weight_values = [weights.accuracy, weights.sensitivity, weights.specificity, ...
+                     weights.precision, weights.f1_score, weights.auc];
+    
+    for i = 1:length(methods)
+        score = 0;
+        for j = 1:length(metrics)
+            value = results.(methods{i}).performance.(metrics{j});
+            contribution = value * weight_values(j);
+            metric_contributions(i, j) = contribution;
+            score = score + contribution;
+        end
+        comprehensive_scores(i) = score;
+    end
+    
+    % 1. 创建综合评分条形图
+    fig1 = figure('Name', 'Comprehensive Performance Score', 'Position', [100, 100, 900, 600]);
+    
+    [sorted_scores, sort_idx] = sort(comprehensive_scores, 'descend');
+    sorted_methods = methods(sort_idx);
+    
+    % 创建水平条形图
+    barh(sorted_scores, 'FaceColor', [0.3, 0.6, 0.9]);
+    
+    % 设置图形属性
+    set(gca, 'YTick', 1:length(sorted_methods), 'YTickLabel', sorted_methods);
+    xlabel('综合性能评分', 'FontSize', 12);
+    title('方法综合性能评分（加权）', 'FontSize', 16, 'FontWeight', 'bold');
+    grid on;
+    
+    % 添加分数标签
+    for i = 1:length(sorted_scores)
+        text(sorted_scores(i) + 0.002, i, sprintf('%.3f', sorted_scores(i)), ...
+            'VerticalAlignment', 'middle', 'FontSize', 10);
+    end
+    
+    % 保存图形
+    save_figure(fig1, figure_dir, 'comprehensive_performance_score', 'Formats', {'svg'});
+    close(fig1);
+    
+    % 2. 创建堆叠贡献图
+    fig2 = figure('Name', 'Performance Contribution', 'Position', [100, 100, 1200, 700]);
+    
+    % 重新排序贡献矩阵
+    sorted_contributions = metric_contributions(sort_idx, :);
+    
+    % 创建堆叠条形图
+    bar_h = bar(sorted_contributions, 'stacked');
+    
+    % 设置图形属性
+    set(gca, 'XTick', 1:length(sorted_methods), 'XTickLabel', sorted_methods, 'XTickLabelRotation', 45);
+    ylabel('贡献值', 'FontSize', 12);
+    title('各指标对综合评分的贡献', 'FontSize', 16, 'FontWeight', 'bold');
+    grid on;
+    
+    % 添加图例
+    legend(metric_labels, 'Location', 'eastoutside');
+    
+    % 设置不同的颜色
+    colormap(lines(6));
+    
+    % 保存图形
+    save_figure(fig2, figure_dir, 'performance_contribution', 'Formats', {'svg'});
+    close(fig2);
+    
+    % 3. 创建权重分布饼图
+    fig3 = figure('Name', 'Weight Distribution', 'Position', [100, 100, 800, 800]);
+    
+    % 创建饼图
+    pie(weight_values, metric_labels);
+    title('性能指标权重分布', 'FontSize', 16, 'FontWeight', 'bold');
+    
+    % 保存图形
+    save_figure(fig3, figure_dir, 'weight_distribution', 'Formats', {'svg'});
+    close(fig3);
+end
+
+% 辅助函数：创建交叉验证结果表 - 新增
 function cv_table = create_cv_results_table(cv_results)
 % 创建K折交叉验证结果表
 % 输入:
@@ -3486,83 +4643,135 @@ cv_table = [cv_table; mean_row; std_row];
 
 end
 
-%% K折表现的可视化函数
-function create_kfold_performance_visualization(cv_results, figure_dir)
-% 创建K折交叉验证各折性能可视化
+%% 校准曲线图函数
+function create_calibration_curves(results, methods, figure_dir)
+% 创建校准曲线图
 % 输入:
-%   cv_results - 交叉验证结果
+%   results - 结果结构
+%   methods - 方法名称
 %   figure_dir - 图形保存目录
 
-% 获取折数
-k = length(cv_results.accuracy);
+fig = figure('Name', 'Calibration Curves', 'Position', [100, 100, 1000, 800]);
 
-% 创建图形
-fig = figure('Name', 'K-Fold Performance by Fold', 'Position', [100, 100, 1200, 800]);
+colors = lines(length(methods));
+markers = {'o', 's', 'd', '^', 'v', '>', '<', 'p', 'h'};
+hold on;
 
-% 准备数据
-metrics = {'accuracy', 'precision', 'recall', 'specificity', 'f1_score', 'auc'};
-metric_labels = {'准确率', '精确率', '召回率', '特异性', 'F1分数', 'AUC'};
-n_metrics = length(metrics);
+legend_entries = cell(length(methods), 1);
 
-% 创建子图布局
-rows = 2;
-cols = 3;
+% 绘制理想校准曲线
+plot([0, 1], [0, 1], 'k--', 'LineWidth', 1.5);
 
-% 绘制每个指标的折线图
-for i = 1:n_metrics
-    metric = metrics{i};
-    metric_label = metric_labels{i};
+n_bins = 10;  % 分箱数量
+bin_edges = linspace(0, 1, n_bins+1);
+bin_centers = (bin_edges(1:end-1) + bin_edges(2:end)) / 2;
+
+for i = 1:length(methods)
+    method = methods{i};
     
-    % 创建子图
-    subplot(rows, cols, i);
-    
-    % 获取数据
-    values = cv_results.(metric);
-    mean_val = cv_results.(['avg_' metric]);
-    std_val = cv_results.(['std_' metric]);
-    
-    % 绘制折线图
-    plot(1:k, values, 'o-', 'LineWidth', 1.5, 'Color', [0.3, 0.6, 0.8], 'MarkerFaceColor', [0.3, 0.6, 0.8]);
-    hold on;
-    
-    % 绘制均值线
-    plot([0.5, k+0.5], [mean_val, mean_val], 'r--', 'LineWidth', 1.5);
-    
-    % 绘制标准差区间
-    fill([1:k, fliplr(1:k)], [mean_val + std_val * ones(1, k), fliplr(mean_val - std_val * ones(1, k))], ...
-        [0.8, 0.8, 0.8], 'EdgeColor', 'none', 'FaceAlpha', 0.3);
-    
-    % 设置图形属性
-    xlabel('折数', 'FontSize', 10);
-    ylabel(metric_label, 'FontSize', 10);
-    title(sprintf('%s (均值=%.3f, 标准差=%.3f)', metric_label, mean_val, std_val), 'FontSize', 12);
-    grid on;
-    xlim([0.5, k+0.5]);
-    
-    % 调整Y轴范围
-    if strcmp(metric, 'auc') || strcmp(metric, 'f1_score')
-        ylim([0.5, 1]);
+    % 检查是否存在预测概率
+    if isfield(results.(method).performance, 'y_pred_prob') && ...
+       isfield(results.(method).performance, 'y_test')
+        
+        y_pred_prob = results.(method).performance.y_pred_prob;
+        y_test = results.(method).performance.y_test;
+        
+        % 合并所有Bootstrap样本的数据
+        all_probs = [];
+        all_labels = [];
+        
+        for j = 1:length(y_pred_prob)
+            if ~isempty(y_pred_prob{j}) && ~isempty(y_test{j})
+                all_probs = [all_probs; y_pred_prob{j}];
+                all_labels = [all_labels; y_test{j}];
+            end
+        end
+        
+        if ~isempty(all_probs) && ~isempty(all_labels)
+            % 计算校准曲线
+            [fraction_of_positives, mean_predicted_value] = calibration_curve(all_labels, all_probs, n_bins);
+            
+            % 绘制校准曲线
+            color_idx = mod(i-1, size(colors, 1)) + 1;
+            marker_idx = mod(i-1, length(markers)) + 1;
+            
+            plot(mean_predicted_value, fraction_of_positives, ['-' markers{marker_idx}], ...
+                'Color', colors(color_idx,:), 'LineWidth', 2, 'MarkerSize', 8, ...
+                'MarkerFaceColor', colors(color_idx,:));
+            
+            % 计算Brier分数（校准误差）
+            brier_score = mean((all_probs - all_labels).^2);
+            
+            legend_entries{i} = sprintf('%s (Brier=%.3f)', method, brier_score);
+        else
+            legend_entries{i} = method;
+        end
     else
-        ylim([0, 1]);
+        % 使用单点性能指标
+        y_pred = results.(method).performance.avg_sensitivity;
+        y_true = results.(method).performance.avg_precision;
+        
+        color_idx = mod(i-1, size(colors, 1)) + 1;
+        marker_idx = mod(i-1, length(markers)) + 1;
+        
+        plot(y_pred, y_true, markers{marker_idx}, 'Color', colors(color_idx,:), ...
+            'MarkerSize', 12, 'LineWidth', 2, 'MarkerFaceColor', colors(color_idx,:));
+        
+        legend_entries{i} = sprintf('%s (单点)', method);
     end
-    
-    % 添加数据点标签
-    for j = 1:k
-        text(j, values(j) + 0.02, sprintf('%.3f', values(j)), ...
-            'HorizontalAlignment', 'center', 'FontSize', 7);
-    end
-    
-    % 添加图例
-    legend({'各折值', '均值', '标准差区间'}, 'Location', 'best', 'FontSize', 8);
 end
 
-% 添加总标题
-sgtitle(sprintf('K折交叉验证各折性能指标 (K=%d)', k), 'FontSize', 16, 'FontWeight', 'bold');
-set(gcf, 'Color', 'white');
+% 设置图形属性
+xlim([0, 1]);
+ylim([0, 1]);
+xlabel('预测概率', 'FontSize', 12, 'FontWeight', 'bold');
+ylabel('实际阳性比例', 'FontSize', 12, 'FontWeight', 'bold');
+title('不同变量选择方法的校准曲线比较', 'FontSize', 14, 'FontWeight', 'bold');
+legend([legend_entries; {'完美校准'}], 'Location', 'southeast', 'FontSize', 10);
+grid on;
+set(gca, 'FontSize', 11);
+box on;
 
 % 保存图形
-save_figure(fig, figure_dir, 'kfold_performance_by_fold', 'Formats', {'svg'});
+save_figure(fig, figure_dir, 'calibration_curves', 'Formats', {'svg'});
 close(fig);
+end
+
+% 辅助函数：计算校准曲线
+function [fraction_of_positives, mean_predicted_value] = calibration_curve(y_true, y_prob, n_bins)
+% 计算校准曲线
+% 输入:
+%   y_true - 真实标签
+%   y_prob - 预测概率
+%   n_bins - 分箱数量
+% 输出:
+%   fraction_of_positives - 每个分箱中的实际阳性比例
+%   mean_predicted_value - 每个分箱的平均预测概率
+
+% 计算分箱边界
+bin_edges = linspace(0, 1, n_bins+1);
+
+% 初始化结果数组
+fraction_of_positives = zeros(n_bins, 1);
+mean_predicted_value = zeros(n_bins, 1);
+
+% 对每个分箱计算
+for i = 1:n_bins
+    % 找出落入当前分箱的样本
+    bin_mask = (y_prob >= bin_edges(i)) & (y_prob < bin_edges(i+1));
+    
+    % 如果分箱为空，使用默认值
+    if sum(bin_mask) == 0
+        fraction_of_positives(i) = 0;
+        mean_predicted_value(i) = (bin_edges(i) + bin_edges(i+1)) / 2;
+    else
+        % 计算实际阳性比例
+        fraction_of_positives(i) = mean(y_true(bin_mask));
+        
+        % 计算平均预测概率
+        mean_predicted_value(i) = mean(y_prob(bin_mask));
+    end
+end
 end
 
 %% 创建变量组合性能表 - 修复版
@@ -4442,137 +5651,6 @@ end
 % 确保精确率-召回率曲线是单调递减的
 for i = n_thresholds-1:-1:1
     precision(i) = max(precision(i), precision(i+1));
-end
-end
-
-%% 校准曲线图函数
-function create_calibration_curves(results, methods, figure_dir)
-% 创建校准曲线图
-% 输入:
-%   results - 结果结构
-%   methods - 方法名称
-%   figure_dir - 图形保存目录
-
-fig = figure('Name', 'Calibration Curves', 'Position', [100, 100, 1000, 800]);
-
-colors = lines(length(methods));
-markers = {'o', 's', 'd', '^', 'v', '>', '<', 'p', 'h'};
-hold on;
-
-legend_entries = cell(length(methods), 1);
-
-% 绘制理想校准曲线
-plot([0, 1], [0, 1], 'k--', 'LineWidth', 1.5);
-
-n_bins = 10;  % 分箱数量
-bin_edges = linspace(0, 1, n_bins+1);
-bin_centers = (bin_edges(1:end-1) + bin_edges(2:end)) / 2;
-
-for i = 1:length(methods)
-    method = methods{i};
-    
-    % 检查是否存在预测概率
-    if isfield(results.(method).performance, 'y_pred_prob') && ...
-       isfield(results.(method).performance, 'y_test')
-        
-        y_pred_prob = results.(method).performance.y_pred_prob;
-        y_test = results.(method).performance.y_test;
-        
-        % 合并所有Bootstrap样本的数据
-        all_probs = [];
-        all_labels = [];
-        
-        for j = 1:length(y_pred_prob)
-            if ~isempty(y_pred_prob{j}) && ~isempty(y_test{j})
-                all_probs = [all_probs; y_pred_prob{j}];
-                all_labels = [all_labels; y_test{j}];
-            end
-        end
-        
-        if ~isempty(all_probs) && ~isempty(all_labels)
-            % 计算校准曲线
-            [fraction_of_positives, mean_predicted_value] = calibration_curve(all_labels, all_probs, n_bins);
-            
-            % 绘制校准曲线
-            color_idx = mod(i-1, size(colors, 1)) + 1;
-            marker_idx = mod(i-1, length(markers)) + 1;
-            
-            plot(mean_predicted_value, fraction_of_positives, ['-' markers{marker_idx}], ...
-                'Color', colors(color_idx,:), 'LineWidth', 2, 'MarkerSize', 8, ...
-                'MarkerFaceColor', colors(color_idx,:));
-            
-            % 计算Brier分数（校准误差）
-            brier_score = mean((all_probs - all_labels).^2);
-            
-            legend_entries{i} = sprintf('%s (Brier=%.3f)', method, brier_score);
-        else
-            legend_entries{i} = method;
-        end
-    else
-        % 使用单点性能指标
-        y_pred = results.(method).performance.avg_sensitivity;
-        y_true = results.(method).performance.avg_precision;
-        
-        color_idx = mod(i-1, size(colors, 1)) + 1;
-        marker_idx = mod(i-1, length(markers)) + 1;
-        
-        plot(y_pred, y_true, markers{marker_idx}, 'Color', colors(color_idx,:), ...
-            'MarkerSize', 12, 'LineWidth', 2, 'MarkerFaceColor', colors(color_idx,:));
-        
-        legend_entries{i} = sprintf('%s (单点)', method);
-    end
-end
-
-% 设置图形属性
-xlim([0, 1]);
-ylim([0, 1]);
-xlabel('预测概率', 'FontSize', 12, 'FontWeight', 'bold');
-ylabel('实际阳性比例', 'FontSize', 12, 'FontWeight', 'bold');
-title('不同变量选择方法的校准曲线比较', 'FontSize', 14, 'FontWeight', 'bold');
-legend([legend_entries; {'完美校准'}], 'Location', 'southeast', 'FontSize', 10);
-grid on;
-set(gca, 'FontSize', 11);
-box on;
-
-% 保存图形
-save_figure(fig, figure_dir, 'calibration_curves', 'Formats', {'svg'});
-close(fig);
-end
-
-% 辅助函数：计算校准曲线
-function [fraction_of_positives, mean_predicted_value] = calibration_curve(y_true, y_prob, n_bins)
-% 计算校准曲线
-% 输入:
-%   y_true - 真实标签
-%   y_prob - 预测概率
-%   n_bins - 分箱数量
-% 输出:
-%   fraction_of_positives - 每个分箱中的实际阳性比例
-%   mean_predicted_value - 每个分箱的平均预测概率
-
-% 计算分箱边界
-bin_edges = linspace(0, 1, n_bins+1);
-
-% 初始化结果数组
-fraction_of_positives = zeros(n_bins, 1);
-mean_predicted_value = zeros(n_bins, 1);
-
-% 对每个分箱计算
-for i = 1:n_bins
-    % 找出落入当前分箱的样本
-    bin_mask = (y_prob >= bin_edges(i)) & (y_prob < bin_edges(i+1));
-    
-    % 如果分箱为空，使用默认值
-    if sum(bin_mask) == 0
-        fraction_of_positives(i) = 0;
-        mean_predicted_value(i) = (bin_edges(i) + bin_edges(i+1)) / 2;
-    else
-        % 计算实际阳性比例
-        fraction_of_positives(i) = mean(y_true(bin_mask));
-        
-        % 计算平均预测概率
-        mean_predicted_value(i) = mean(y_prob(bin_mask));
-    end
 end
 end
 

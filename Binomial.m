@@ -1878,7 +1878,7 @@ for i = 1:length(methods)
                 % 计算对数几率
                 logodds = log(all_probs ./ (1 - all_probs));
                 
-                % 计算残差（皮尔森残差）
+                % 计算残差（皮尔逊残差）
                 residuals = (all_labels - all_probs) ./ sqrt(all_probs .* (1 - all_probs));
                 
                 % 计算Deviance残差
@@ -1888,15 +1888,16 @@ for i = 1:length(methods)
                 % 创建残差分析图
                 fig = figure('Name', sprintf('%s Residual Analysis', method), 'Position', [100, 100, 1200, 900]);
                 
-                % 创建2x3的子图布局，而不是2x2
-                % 创建子图1：皮尔森残差 vs 预测概率
+                % 第一行：皮尔逊残差相关图表
+                
+                % 创建子图1：皮尔逊残差 vs 预测概率
                 subplot(2, 3, 1);
                 scatter(all_probs, residuals, 30, 'filled', 'MarkerFaceAlpha', 0.6);
                 hold on;
                 plot([0, 1], [0, 0], 'k--');
                 xlabel('预测概率', 'FontSize', 10);
-                ylabel('皮尔森残差', 'FontSize', 10);
-                title('皮尔森残差 vs 预测概率', 'FontSize', 12);
+                ylabel('皮尔逊残差', 'FontSize', 10);
+                title('皮尔逊残差 vs 预测概率', 'FontSize', 12);
                 grid on;
                 
                 % 添加平滑曲线
@@ -1907,8 +1908,24 @@ for i = 1:length(methods)
                 catch
                     % 如果平滑失败，忽略
                 end
-                % 创建子图2：Deviance残差 vs 预测概率
+                
+                % 创建子图2：皮尔逊残差箱线图
                 subplot(2, 3, 2);
+                boxplot(residuals, all_labels, 'Labels', {'0', '1'});
+                ylabel('皮尔逊残差', 'FontSize', 10);
+                title('按实际类别分组的皮尔逊残差', 'FontSize', 12);
+                grid on;
+                
+                % 创建子图3：皮尔逊残差QQ图
+                subplot(2, 3, 3);
+                qqplot(residuals);
+                title('皮尔逊残差QQ图', 'FontSize', 12);
+                grid on;
+                
+                % 第二行：Deviance残差相关图表
+                
+                % 创建子图4：Deviance残差 vs 预测概率
+                subplot(2, 3, 4);
                 scatter(all_probs, deviance_residuals, 30, 'filled', 'MarkerFaceAlpha', 0.6);
                 hold on;
                 plot([0, 1], [0, 0], 'k--');
@@ -1926,31 +1943,19 @@ for i = 1:length(methods)
                     % 如果平滑失败，忽略
                 end
                 
-                % 创建子图3：皮尔森残差箱线图
-                subplot(2, 3, 3);
-                boxplot(residuals, all_labels, 'Labels', {'0', '1'});
-                ylabel('皮尔森残差', 'FontSize', 10);
-                title('按实际类别分组的皮尔森残差', 'FontSize', 12);
-                grid on;
-                
-                % 创建子图4：Deviance残差箱线图 (新增)
-                subplot(2, 3, 4);
+                % 创建子图5：Deviance残差箱线图
+                subplot(2, 3, 5);
                 boxplot(deviance_residuals, all_labels, 'Labels', {'0', '1'});
                 ylabel('Deviance残差', 'FontSize', 10);
                 title('按实际类别分组的Deviance残差', 'FontSize', 12);
                 grid on;
                 
-                % 创建子图5：皮尔森残差QQ图
-                subplot(2, 3, 5);
-                qqplot(residuals);
-                title('皮尔森残差QQ图', 'FontSize', 12);
-                grid on;
-                
-                % 创建子图6：Deviance残差QQ图 (新增)
+                % 创建子图6：Deviance残差QQ图
                 subplot(2, 3, 6);
                 qqplot(deviance_residuals);
                 title('Deviance残差QQ图', 'FontSize', 12);
                 grid on;
+                
                 % 添加总标题
                 sgtitle(sprintf('%s方法的残差分析', method), 'FontSize', 14, 'FontWeight', 'bold');
                 
@@ -1969,14 +1974,14 @@ for i = 1:length(methods)
                 stats.pearson_kurtosis = kurtosis(residuals);
                 stats.deviance_mean = mean(deviance_residuals);
                 stats.deviance_std = std(deviance_residuals);
-                stats.deviance_min = min(deviance_residuals);  % 新增
-                stats.deviance_max = max(deviance_residuals);  % 新增
-                stats.deviance_skewness = skewness(deviance_residuals);  % 新增
-                stats.deviance_kurtosis = kurtosis(deviance_residuals);  % 新增
+                stats.deviance_min = min(deviance_residuals);
+                stats.deviance_max = max(deviance_residuals);
+                stats.deviance_skewness = skewness(deviance_residuals);
+                stats.deviance_kurtosis = kurtosis(deviance_residuals);
                 
                 % 输出残差统计信息
                 log_message('info', sprintf('%s方法残差统计:', method));
-                log_message('info', sprintf('皮尔森残差: 均值=%.3f, 标准差=%.3f, 偏度=%.3f, 峰度=%.3f', ...
+                log_message('info', sprintf('皮尔逊残差: 均值=%.3f, 标准差=%.3f, 偏度=%.3f, 峰度=%.3f', ...
                     stats.pearson_mean, stats.pearson_std, stats.pearson_skewness, stats.pearson_kurtosis));
                 log_message('info', sprintf('Deviance残差: 均值=%.3f, 标准差=%.3f, 偏度=%.3f, 峰度=%.3f', ...
                     stats.deviance_mean, stats.deviance_std, stats.deviance_skewness, stats.deviance_kurtosis));
@@ -1986,7 +1991,7 @@ for i = 1:length(methods)
                 deviance_outliers = abs(deviance_residuals) > 2.5;
                 
                 if any(pearson_outliers)
-                    log_message('info', sprintf('%s方法检测到%d个皮尔森残差异常点(|残差|>2.5)', ...
+                    log_message('info', sprintf('%s方法检测到%d个皮尔逊残差异常点(|残差|>2.5)', ...
                         method, sum(pearson_outliers)));
                 end
                 
@@ -1994,7 +1999,7 @@ for i = 1:length(methods)
                     log_message('info', sprintf('%s方法检测到%d个Deviance残差异常点(|残差|>2.5)', ...
                         method, sum(deviance_outliers)));
                 end
-                else
+            else
                 log_message('warning', sprintf('%s方法没有足够的预测数据进行残差分析', method));
             end
         else
@@ -2561,79 +2566,201 @@ upper = prctile(theta_boot, 100 * alpha_2_adj);
 end
 
 % 参数估计值及其置信区间的森林图（Forest Plot）
-function create_parameter_forest_plot(param_stats, methods, figure_dir)
-    % 为每种方法创建参数森林图
-    % 输入:
-    %   param_stats - 参数统计结果
-    %   methods - 方法名称
-    %   figure_dir - 图形保存目录
-    
-    for m = 1:length(methods)
-        method = methods{m};
+function create_parameter_comparison_across_methods(results, methods, figure_dir)
+% 创建不同方法之间的参数比较森林图
+% 输入:
+%   results - 结果结构
+%   methods - 方法名称
+%   figure_dir - 图形保存目录
+
+try
+    % 提取参数统计信息
+    all_data = struct('method', {}, 'var', {}, 'estimate', {}, 'ci_lower', {}, 'ci_upper', {}, 'p_value', {});
+    colors = lines(length(methods));
+
+    for i = 1:length(methods)
+        method = methods{i};
         
-        % 只处理有参数统计数据的回归类方法
-        if isfield(param_stats, method) && isfield(param_stats.(method), 'table')
-            table_data = param_stats.(method).table;
+        % 检查该方法是否有参数统计
+        if isfield(results, method) && isfield(results.(method), 'params')
+            % 获取该方法的参数统计
+            models = results.(method).models;
             
-            % 提取数据
-            var_names = table_data.Variable;
-            estimates = table_data.Estimate;
+            % 获取最常见组合模型的索引
+            var_combinations = results.(method).var_combinations;
+            combo_strings = cellfun(@(x) sprintf('%d,', sort(x)), var_combinations, 'UniformOutput', false);
+            [unique_combos, ~, ic] = unique(combo_strings);
+            combo_counts = accumarray(ic, 1);
+            [~, max_idx] = max(combo_counts);
+            combo_indices = find(ic == max_idx);
             
-            % 获取置信区间数据
-            % 注意：根据你的代码，可能需要调整列名
-            ci_lower = table_data.CI_Lower_t; % 或 table_data.CI_Lower_BCa
-            ci_upper = table_data.CI_Upper_t; % 或 table_data.CI_Upper_BCa
-            p_values = table_data.p_value;
-            
-            % 创建图形
-            fig = figure('Name', sprintf('%s Parameter Forest Plot', method), 'Position', [100, 100, 1000, 600]);
-            
-            % 按变量名排序（不包括截距）
-            [~, intercept_idx] = ismember('Intercept', var_names);
-            non_intercept_idx = setdiff(1:length(var_names), intercept_idx);
-            [sorted_names, sort_idx] = sort(var_names(non_intercept_idx));
-            
-            % 重排数据
-            plot_vars = [var_names(intercept_idx); sorted_names];
-            plot_estimates = [estimates(intercept_idx); estimates(non_intercept_idx(sort_idx))];
-            plot_ci_lower = [ci_lower(intercept_idx); ci_lower(non_intercept_idx(sort_idx))];
-            plot_ci_upper = [ci_upper(intercept_idx); ci_upper(non_intercept_idx(sort_idx))];
-            plot_p_values = [p_values(intercept_idx); p_values(non_intercept_idx(sort_idx))];
-            
-            % 绘制森林图
-            y_pos = length(plot_vars):-1:1;
-            
-            % 绘制估计值
-            scatter(plot_estimates, y_pos, 100, 'filled', 'MarkerFaceColor', 'b');
-            hold on;
-            
-            % 绘制置信区间
-            for i = 1:length(y_pos)
-                line([plot_ci_lower(i), plot_ci_upper(i)], [y_pos(i), y_pos(i)], 'LineWidth', 2, 'Color', 'b');
-                
-                % 为显著的参数添加标记
-                if plot_p_values(i) < 0.05
-                    text(plot_ci_upper(i) + 0.05, y_pos(i), '*', 'FontSize', 16, 'Color', 'r');
+            % 提取模型参数
+            for j = 1:min(3, length(combo_indices)) % 限制为每个方法最多3个模型
+                mdl_idx = combo_indices(j);
+                if mdl_idx <= length(models)
+                    mdl = models{mdl_idx};
+                    
+                    % 提取参数
+                    try
+                        if isa(mdl, 'TreeBagger')
+                            continue; % 跳过随机森林模型
+                        elseif isa(mdl, 'GeneralizedLinearModel')
+                            coefs = mdl.Coefficients;
+                            est = coefs.Estimate;
+                            stderr = coefs.SE;
+                            pval = coefs.pValue;
+                            
+                            % 计算置信区间
+                            tval = tinv(0.975, mdl.DFE);
+                            ci_lo = est - tval * stderr;
+                            ci_hi = est + tval * stderr;
+                            
+                            % 获取变量名
+                            var_list = coefs.Properties.RowNames;
+                            
+                            % 添加到结构体
+                            for k = 1:length(est)
+                                data_item = struct('method', method, ...
+                                                   'var', var_list{k}, ...
+                                                   'estimate', est(k), ...
+                                                   'ci_lower', ci_lo(k), ...
+                                                   'ci_upper', ci_hi(k), ...
+                                                   'p_value', pval(k));
+                                all_data(end+1) = data_item;
+                            end
+                        else
+                            continue; % 跳过其他类型的模型
+                        end
+                    catch ME
+                        log_message('warning', sprintf('提取模型参数失败: %s', ME.message));
+                        continue;
+                    end
                 end
             end
-            
-            % 添加零线
-            line([0, 0], [0, length(plot_vars)+1], 'LineStyle', '--', 'Color', 'k');
-            
-            % 设置图形属性
-            set(gca, 'YTick', y_pos, 'YTickLabel', plot_vars, 'FontSize', 10);
-            xlabel('参数估计值及95%置信区间', 'FontSize', 12, 'FontWeight', 'bold');
-            title(sprintf('%s方法的参数估计及置信区间', method), 'FontSize', 14, 'FontWeight', 'bold');
-            grid on;
-            
-            % 添加标注说明显著性
-            text(max(plot_ci_upper) + 0.1, 1, '* p < 0.05', 'FontSize', 10, 'Color', 'r');
-            
-            % 保存图形
-            save_figure(fig, figure_dir, sprintf('%s_parameter_forest_plot', method), 'Formats', {'svg'});
-            close(fig);
         end
     end
+
+    % 如果没有收集到数据，则退出
+    if isempty(all_data)
+        log_message('warning', '没有足够的参数数据来创建森林图');
+        return;
+    end
+
+    % 转换为数组格式
+    method_names = {all_data.method};
+    var_names = {all_data.var};
+    estimates = [all_data.estimate];
+    ci_lower = [all_data.ci_lower];
+    ci_upper = [all_data.ci_upper];
+    p_values = [all_data.p_value];
+
+    % 获取唯一变量列表
+    unique_vars = unique(var_names);
+    n_vars = length(unique_vars);
+
+    % 创建森林图
+    fig = figure('Name', 'Parameter Comparison Across Methods', 'Position', [100, 100, 1000, 800]);
+
+    % 准备绘图数据
+    plot_data = [];  % 每行: [y_pos, estimate, ci_lower, ci_upper, method_idx]
+
+    % 从下到上排列变量
+    current_y = 1;
+    var_y_positions = zeros(1, n_vars);
+    method_color_idx = zeros(length(method_names), 1);
+
+    % 为每个变量创建一组点
+    for v = 1:n_vars
+        var_name = unique_vars{v};
+        var_indices = find(strcmp(var_names, var_name));
+        
+        % 记录变量的Y位置
+        var_y_positions(v) = current_y;
+        
+        % 为该变量的每个方法创建一个点
+        for idx = 1:length(var_indices)
+            i = var_indices(idx);
+            
+            % 找出方法的索引
+            method_idx = find(strcmp(methods, method_names{i}));
+            if isempty(method_idx)
+                method_idx = length(methods) + 1;  % 如果找不到，使用额外的颜色
+            end
+            method_color_idx(i) = method_idx;
+            
+            % 添加点
+            point_y = current_y;
+            plot_data(end+1, :) = [point_y, estimates(i), ci_lower(i), ci_upper(i), method_idx];
+            
+            % 增加Y位置
+            current_y = current_y + 0.2;
+        end
+        
+        % 增加组间间隔
+        current_y = current_y + 0.8;
+    end
+
+    % 绘制森林图
+    subplot('Position', [0.25, 0.1, 0.7, 0.8]);
+    hold on;
+
+    % 绘制零线
+    line([0, 0], [0, current_y], 'Color', [0.5, 0.5, 0.5], 'LineStyle', '--', 'LineWidth', 1);
+
+    % 绘制每个点和置信区间
+    for i = 1:size(plot_data, 1)
+        y_pos = plot_data(i, 1);
+        est = plot_data(i, 2);
+        ci_lo = plot_data(i, 3);
+        ci_hi = plot_data(i, 4);
+        m_idx = plot_data(i, 5);
+        
+        % 获取颜色
+        if m_idx <= length(methods)
+            color = colors(m_idx, :);
+        else
+            color = [0.5, 0.5, 0.5];  % 默认灰色
+        end
+        
+        % 绘制中心点
+        plot(est, y_pos, 'o', 'MarkerSize', 8, 'MarkerFaceColor', color, 'MarkerEdgeColor', 'none');
+        
+        % 绘制置信区间线
+        line([ci_lo, ci_hi], [y_pos, y_pos], 'Color', color, 'LineWidth', 2);
+        
+        % 绘制端点
+        line([ci_lo, ci_lo], [y_pos-0.05, y_pos+0.05], 'Color', color, 'LineWidth', 2);
+        line([ci_hi, ci_hi], [y_pos-0.05, y_pos+0.05], 'Color', color, 'LineWidth', 2);
+    end
+
+    % 设置Y轴标签
+    yticks = var_y_positions;
+    set(gca, 'YTick', yticks, 'YTickLabel', unique_vars, 'FontSize', 10);
+
+    % 设置X轴和标题
+    xlabel('参数估计值及95%置信区间', 'FontSize', 12, 'FontWeight', 'bold');
+    title('不同方法之间的参数比较', 'FontSize', 14, 'FontWeight', 'bold');
+    
+    % 添加方法图例
+    legend_handles = [];
+    legend_labels = {};
+    for i = 1:length(methods)
+        h = plot(NaN, NaN, 'o', 'MarkerSize', 8, 'MarkerFaceColor', colors(i,:), 'MarkerEdgeColor', 'none');
+        legend_handles = [legend_handles, h];
+        legend_labels{end+1} = methods{i};
+    end
+    legend(legend_handles, legend_labels, 'Location', 'best', 'FontSize', 10);
+
+    % 保存图形
+    save_figure(fig, figure_dir, 'parameter_comparison_across_methods', 'Formats', {'svg'});
+    close(fig);
+    
+    % 记录成功信息
+    log_message('info', '图形已保存: parameter_comparison_across_methods (SVG)');
+catch ME
+    % 记录错误信息
+    log_message('error', sprintf('创建参数估计值及其置信区间森林图（Forest Plot）时出错: %s', ME.message));
+end
 end
 
 % 参数显著性火山图（Volcano Plot）
@@ -2984,78 +3111,217 @@ function create_parameter_stability_heatmap(coef_stability, methods, figure_dir)
 %   methods - 方法名称
 %   figure_dir - 图形保存目录
 
-% 收集变量和方法
-all_vars = {};
-valid_methods = {};
-cv_data = [];
+try
+    % 收集变量和方法
+    all_vars = {};
+    valid_methods = {};
+    cv_data = [];
 
-for i = 1:length(methods)
-    method = methods{i};
-    
-    % 检查该方法是否有系数稳定性结果
-    if isfield(coef_stability, method) && isfield(coef_stability.(method), 'table')
-        table_data = coef_stability.(method).table;
+    for i = 1:length(methods)
+        method = methods{i};
         
-        % 添加方法
-        valid_methods{end+1} = method;
-        
-        % 收集变量
-        for j = 1:height(table_data)
-            var_name = table_data.Variable{j};
+        % 检查该方法是否有系数稳定性结果
+        if isfield(coef_stability, method) && isfield(coef_stability.(method), 'table')
+            table_data = coef_stability.(method).table;
             
-            % 如果变量尚未添加，则添加
-            if ~any(strcmp(all_vars, var_name))
-                all_vars{end+1} = var_name;
+            % 检查表格中的变量名
+            table_vars = table_data.Properties.VariableNames;
+            log_message('debug', sprintf('方法%s的表格变量名: %s', method, strjoin(table_vars, ', ')));
+            
+            % 尝试找到包含变异系数的列
+            cv_column = '';
+            for v = 1:length(table_vars)
+                var_name = lower(table_vars{v});
+                if strcmp(var_name, 'cv') || ...
+                   contains(var_name, 'variat') || ...
+                   contains(var_name, 'coef') || ...
+                   contains(var_name, 'variability')
+                    cv_column = table_vars{v};
+                    break;
+                end
             end
             
-            % 找出变量索引
-            var_idx = find(strcmp(all_vars, var_name));
-            
-            % 创建或更新CV值矩阵
-            if isempty(cv_data)
-                cv_data = zeros(length(all_vars), length(methods));
+            % 如果找不到CV列，尝试自己计算
+            if isempty(cv_column)
+                % 检查是否有Mean和StdDev列
+                mean_col = '';
+                std_col = '';
+                
+                for v = 1:length(table_vars)
+                    var_name = lower(table_vars{v});
+                    if strcmp(var_name, 'mean') || contains(var_name, 'mean') || contains(var_name, 'avg')
+                        mean_col = table_vars{v};
+                    elseif strcmp(var_name, 'stddev') || contains(var_name, 'std') || contains(var_name, 'dev')
+                        std_col = table_vars{v};
+                    end
+                end
+                
+                % 如果找到Mean和StdDev列，计算CV
+                if ~isempty(mean_col) && ~isempty(std_col)
+                    % 添加CV列
+                    means = table_data.(mean_col);
+                    stds = table_data.(std_col);
+                    
+                    % 计算变异系数
+                    cvs = zeros(size(means));
+                    for j = 1:length(means)
+                        if abs(means(j)) > 1e-6
+                            cvs(j) = abs(stds(j) / means(j));
+                        else
+                            cvs(j) = 0;
+                        end
+                    end
+                    
+                    % 添加到表格
+                    table_data.CV = cvs;
+                    cv_column = 'CV';
+                else
+                    % 如果无法计算CV，检查是否有cv字段
+                    if isfield(coef_stability.(method), 'cv')
+                        cvs = coef_stability.(method).cv;
+                        table_data.CV = cvs';  % 转置为列向量
+                        cv_column = 'CV';
+                    else
+                        % 如果仍然找不到，跳过此方法
+                        log_message('warning', sprintf('无法为方法%s找到或计算变异系数', method));
+                        continue;
+                    end
+                end
             end
             
-            if length(var_idx) == 1 && i <= size(cv_data, 2)
-                cv_data(var_idx, length(valid_methods)) = table_data.CV(j);
+            % 尝试找到变量名列
+            var_column = '';
+            for v = 1:length(table_vars)
+                var_name = lower(table_vars{v});
+                if strcmp(var_name, 'variable') || contains(var_name, 'var') || contains(var_name, 'name') || contains(var_name, 'param')
+                    var_column = table_vars{v};
+                    break;
+                end
+            end
+            
+            % 如果找不到变量名列，检查是否有variables字段
+            if isempty(var_column) && isfield(coef_stability.(method), 'variables')
+                % 直接使用variables字段
+                var_names = coef_stability.(method).variables;
+                
+                % 验证长度匹配
+                if length(var_names) == height(table_data)
+                    % 添加方法
+                    valid_methods{end+1} = method;
+                    
+                    % 收集变量和CV值
+                    for j = 1:length(var_names)
+                        var_name = var_names{j};
+                        
+                        % 如果变量尚未添加，则添加
+                        if ~any(strcmp(all_vars, var_name))
+                            all_vars{end+1} = var_name;
+                        end
+                        
+                        % 找出变量索引
+                        var_idx = find(strcmp(all_vars, var_name));
+                        
+                        % 创建或更新CV值矩阵
+                        if isempty(cv_data)
+                            cv_data = zeros(length(all_vars), length(methods));
+                        elseif size(cv_data, 1) < length(all_vars)
+                            % 扩展矩阵
+                            cv_data(end+1:length(all_vars), :) = 0;
+                        end
+                        
+                        if length(var_idx) == 1 && length(valid_methods) <= size(cv_data, 2)
+                            cv_data(var_idx, length(valid_methods)) = table_data.(cv_column)(j);
+                        end
+                    end
+                else
+                    log_message('warning', sprintf('方法%s的变量数量与表格行数不匹配', method));
+                    continue;
+                end
+            else if ~isempty(var_column)
+                % 使用表格中的变量名列
+                var_names = table_data.(var_column);
+                
+                % 添加方法
+                valid_methods{end+1} = method;
+                
+                % 收集变量和CV值
+                for j = 1:length(var_names)
+                    var_name = var_names{j};
+                    
+                    % 如果变量尚未添加，则添加
+                    if ~any(strcmp(all_vars, var_name))
+                        all_vars{end+1} = var_name;
+                    end
+                    
+                    % 找出变量索引
+                    var_idx = find(strcmp(all_vars, var_name));
+                    
+                    % 创建或更新CV值矩阵
+                    if isempty(cv_data)
+                        cv_data = zeros(length(all_vars), length(methods));
+                    elseif size(cv_data, 1) < length(all_vars)
+                        % 扩展矩阵
+                        cv_data(end+1:length(all_vars), :) = 0;
+                    end
+                    
+                    if length(var_idx) == 1 && length(valid_methods) <= size(cv_data, 2)
+                        cv_data(var_idx, length(valid_methods)) = table_data.(cv_column)(j);
+                    end
+                end
+            else
+                % 如果找不到变量名列，跳过此方法
+                log_message('warning', sprintf('无法为方法%s找到变量名列', method));
+                continue;
+                end
             end
         end
     end
+
+    % 如果没有收集到数据，则退出
+    if isempty(cv_data) || isempty(valid_methods)
+        log_message('warning', '没有足够的系数稳定性数据来创建热力图');
+        return;
+    end
+    
+    % 确保cv_data的大小与all_vars和valid_methods匹配
+    cv_data = cv_data(1:length(all_vars), 1:length(valid_methods));
+
+    % 创建热力图
+    fig = figure('Name', 'Parameter Stability Heatmap', 'Position', [100, 100, 1000, 800]);
+
+    % 绘制热力图
+    h = heatmap(valid_methods, all_vars, cv_data);
+
+    % 设置热力图属性
+    h.Title = '参数稳定性热力图 (变异系数 CV)';
+    h.XLabel = '方法';
+    h.YLabel = '变量';
+    h.FontSize = 10;
+
+    % 使用正确的格式化字符串
+    h.CellLabelFormat = '%.2f';
+
+    % 设置颜色映射
+    colormap(jet);
+    caxis([0, 1]); % 设置色条范围
+
+    % 添加颜色条
+    c = colorbar;
+    c.Label.String = '变异系数 (CV)';
+
+    % 保存图形
+    save_figure(fig, figure_dir, 'parameter_stability_heatmap', 'Formats', {'svg'});
+    close(fig);
+    
+    % 记录成功信息
+    log_message('info', '图形已保存: parameter_stability_heatmap (SVG)');
+catch ME
+    % 记录错误信息和堆栈
+    log_message('error', sprintf('创建参数稳定性热力图时出错: %s', ME.message));
+    for i = 1:length(ME.stack)
+        log_message('debug', sprintf('  %s, 行 %d', ME.stack(i).name, ME.stack(i).line));
+    end
 end
-
-% 如果没有收集到数据，则退出
-if isempty(cv_data) || isempty(valid_methods)
-    log_message('warning', '没有足够的系数稳定性数据来创建热力图');
-    return;
-end
-
-% 创建热力图
-fig = figure('Name', 'Parameter Stability Heatmap', 'Position', [100, 100, 1000, 800]);
-
-% 绘制热力图
-h = heatmap(valid_methods, all_vars, cv_data);
-
-% 设置热力图属性
-h.Title = '参数稳定性热力图 (变异系数 CV)';
-h.XLabel = '方法';
-h.YLabel = '变量';
-h.FontSize = 10;
-
-% 使用正确的格式化字符串
-% 注意：使用'%.2f'而不是'%0.2f'作为格式化字符串
-h.CellLabelFormat = '%.2f';
-
-% 设置颜色映射
-colormap(jet);
-caxis([0, 1]); % 设置色条范围
-
-% 添加颜色条
-c = colorbar;
-c.Label.String = '变异系数 (CV)';
-
-% 保存图形
-save_figure(fig, figure_dir, 'parameter_stability_heatmap', 'Formats', {'svg'});
-close(fig);
 end
 
 % 创建参数估计箱线图
@@ -3998,7 +4264,7 @@ function save_enhanced_results(results, var_names, group_means, cv_results, coef
     figure_path = fullfile(figure_dir, 'parameter_forest.svg');
     if ~exist(figure_path, 'file')
         try
-            create_parameter_forest_plot(param_stats, methods, figure_dir);
+            create_parameter_comparison_across_methods(param_stats, methods, figure_dir);
             log_message('info', '参数估计值及其置信区间森林图（Forest Plot）已保存');
         catch ME
             log_message('error', sprintf('创建参数估计值及其置信区间森林图（Forest Plot）时出错: %s', ME.message));

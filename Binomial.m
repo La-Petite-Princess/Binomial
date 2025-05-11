@@ -115,7 +115,7 @@ try
     
     % 6. 使用Bootstrap生成样本
     t_start = toc;
-    [train_indices, test_indices] = bootstrap_sampling(y, 0.8, 100);
+    [train_indices, test_indices] = bootstrap_sampling(y, 0.8, 1000);
     t_end = toc;
     log_message('info', sprintf('Bootstrap抽样完成，生成了%d个训练/测试集，耗时：%.2f秒', ...
         length(train_indices), t_end - t_start));
@@ -3269,7 +3269,9 @@ for m = 1:length(methods)
         % 添加p值标记
         if isfield(table_data, 'p_value') && isfield(table_data, 'Significance')
             for i = 1:length(var_names)
-                text(ci_upper(i) + 0.1*range([ci_lower; ci_upper]), y_pos(i), ...
+                % 修正 - 不使用range函数，直接使用固定偏移
+                offset = max(ci_upper) * 0.1; % 使用最大置信上限的10%作为偏移量
+                text(ci_upper(i) + offset, y_pos(i), ...
                     sprintf('p=%.3f %s', table_data.p_value(i), table_data.Significance{i}), ...
                     'VerticalAlignment', 'middle', 'FontSize', 9);
             end
@@ -3302,7 +3304,12 @@ if ~isempty(viable_methods)
     % 寻找共有的变量
     all_vars = {};
     for i = 1:length(viable_methods)
-        vars = method_data{i}.Variable;
+        if iscell(method_data{i}.Variable)
+            vars = method_data{i}.Variable;
+        else
+            % 确保变量名是cell数组格式
+            vars = cellstr(method_data{i}.Variable);
+        end
         all_vars = union(all_vars, vars);
     end
     
@@ -3318,7 +3325,12 @@ if ~isempty(viable_methods)
         
         for i = 1:length(viable_methods)
             table_data = method_data{i};
-            var_idx = find(strcmp(table_data.Variable, var_name));
+            % 确保变量名比较使用正确的格式
+            if iscell(table_data.Variable)
+                var_idx = find(strcmp(table_data.Variable, var_name));
+            else
+                var_idx = find(strcmp(cellstr(table_data.Variable), var_name));
+            end
             
             if ~isempty(var_idx)
                 estimates = [estimates; table_data.Estimate(var_idx)];
@@ -3358,7 +3370,11 @@ if ~isempty(viable_methods)
             grid on;
             
             % 保存图形
-            save_figure(fig, figure_dir, sprintf('var_comparison_%s', strrep(var_name, ' ', '_')), 'Formats', {'svg'});
+            var_filename = strrep(var_name, ' ', '_');
+            var_filename = strrep(var_filename, '/', '_');  % 移除可能造成文件名问题的字符
+            var_filename = strrep(var_filename, '\', '_');
+            var_filename = strrep(var_filename, ':', '_');
+            save_figure(fig, figure_dir, sprintf('var_comparison_%s', var_filename), 'Formats', {'svg'});
             log_message('info', sprintf('变量 %s 的方法比较图已保存', var_name));
             close(fig);
         end

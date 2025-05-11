@@ -3212,6 +3212,162 @@ function create_coefficient_variation_heatmap(results, methods, var_names, figur
     close(fig);
 end
 
+% 参数估计箱线图
+function create_parameter_boxplot(param_stats, methods, figure_dir)
+% 创建参数估计箱线图
+% 输入:
+%   param_stats - 参数统计结果
+%   methods - 方法名称
+%   figure_dir - 图形保存目录
+
+for m = 1:length(methods)
+    method = methods{m};
+    
+    % 检查该方法是否有参数统计数据
+    if isfield(param_stats, method) && isfield(param_stats.(method), 'table') && ...
+       ~isempty(param_stats.(method).table)
+        
+        % 提取表格数据
+        table_data = param_stats.(method).table;
+        
+        % 获取变量名和估计值
+        var_names = table_data.Variable;
+        estimates = table_data.Estimate;
+        
+        % 获取置信区间
+        ci_lower = table_data.CI_Lower_t;
+        ci_upper = table_data.CI_Upper_t;
+        
+        % 创建图形
+        fig = figure('Name', sprintf('%s Parameter Boxplot', method), 'Position', [100, 100, 800, 600]);
+        
+        % 绘制箱线图 (使用误差条代替箱线图，因为我们只有点估计和置信区间)
+        y_pos = length(var_names):-1:1;
+        
+        % 绘制估计点
+        plot(estimates, y_pos, 'o', 'MarkerSize', 8, 'MarkerFaceColor', 'b', 'MarkerEdgeColor', 'none');
+        hold on;
+        
+        % 绘制置信区间
+        for i = 1:length(var_names)
+            line([ci_lower(i), ci_upper(i)], [y_pos(i), y_pos(i)], 'Color', 'b', 'LineWidth', 1.5);
+            
+            % 绘制端点
+            line([ci_lower(i), ci_lower(i)], [y_pos(i)-0.2, y_pos(i)+0.2], 'Color', 'b', 'LineWidth', 1.5);
+            line([ci_upper(i), ci_upper(i)], [y_pos(i)-0.2, y_pos(i)+0.2], 'Color', 'b', 'LineWidth', 1.5);
+        end
+        
+        % 绘制零线
+        line([0, 0], [0, length(var_names)+1], 'Color', [0.5, 0.5, 0.5], 'LineStyle', '--', 'LineWidth', 1);
+        
+        % 设置坐标轴
+        set(gca, 'YTick', y_pos, 'YTickLabel', var_names);
+        xlabel('参数估计值', 'FontSize', 12);
+        title(sprintf('%s方法的参数估计及95%%置信区间', method), 'FontSize', 14, 'FontWeight', 'bold');
+        grid on;
+        
+        % 添加p值标记
+        if isfield(table_data, 'p_value') && isfield(table_data, 'Significance')
+            for i = 1:length(var_names)
+                text(ci_upper(i) + 0.1*range([ci_lower; ci_upper]), y_pos(i), ...
+                    sprintf('p=%.3f %s', table_data.p_value(i), table_data.Significance{i}), ...
+                    'VerticalAlignment', 'middle', 'FontSize', 9);
+            end
+        end
+        
+        % 保存图形
+        save_figure(fig, figure_dir, sprintf('%s_parameter_boxplot', method), 'Formats', {'svg'});
+        log_message('info', sprintf('%s方法的参数估计箱线图已保存', method));
+        close(fig);
+    else
+        log_message('warning', sprintf('%s方法没有有效的参数统计数据，跳过创建参数估计箱线图', method));
+    end
+end
+
+% 创建汇总比较图
+viable_methods = {};
+method_data = {};
+
+% 收集可用的方法数据
+for i = 1:length(methods)
+    method = methods{i};
+    if isfield(param_stats, method) && isfield(param_stats.(method), 'table') && ...
+       ~isempty(param_stats.(method).table)
+        viable_methods{end+1} = method;
+        method_data{end+1} = param_stats.(method).table;
+    end
+end
+
+if ~isempty(viable_methods)
+    % 寻找共有的变量
+    all_vars = {};
+    for i = 1:length(viable_methods)
+        vars = method_data{i}.Variable;
+        all_vars = union(all_vars, vars);
+    end
+    
+    % 为每个变量创建比较图
+    for v = 1:length(all_vars)
+        var_name = all_vars{v};
+        
+        % 收集该变量在各方法中的估计值和置信区间
+        estimates = [];
+        ci_lower = [];
+        ci_upper = [];
+        method_names = {};
+        
+        for i = 1:length(viable_methods)
+            table_data = method_data{i};
+            var_idx = find(strcmp(table_data.Variable, var_name));
+            
+            if ~isempty(var_idx)
+                estimates = [estimates; table_data.Estimate(var_idx)];
+                ci_lower = [ci_lower; table_data.CI_Lower_t(var_idx)];
+                ci_upper = [ci_upper; table_data.CI_Upper_t(var_idx)];
+                method_names{end+1} = viable_methods{i};
+            end
+        end
+        
+        if length(method_names) >= 2  % 至少需要两种方法才能比较
+            % 创建比较图
+            fig = figure('Name', sprintf('Variable Comparison: %s', var_name), 'Position', [100, 100, 800, 500]);
+            
+            % 绘制比较图
+            y_pos = length(method_names):-1:1;
+            
+            % 绘制估计点
+            plot(estimates, y_pos, 'o', 'MarkerSize', 10, 'MarkerFaceColor', 'r', 'MarkerEdgeColor', 'none');
+            hold on;
+            
+            % 绘制置信区间
+            for i = 1:length(method_names)
+                line([ci_lower(i), ci_upper(i)], [y_pos(i), y_pos(i)], 'Color', 'b', 'LineWidth', 2);
+                
+                % 绘制端点
+                line([ci_lower(i), ci_lower(i)], [y_pos(i)-0.2, y_pos(i)+0.2], 'Color', 'b', 'LineWidth', 2);
+                line([ci_upper(i), ci_upper(i)], [y_pos(i)-0.2, y_pos(i)+0.2], 'Color', 'b', 'LineWidth', 2);
+            end
+            
+            % 绘制零线
+            line([0, 0], [0, length(method_names)+1], 'Color', [0.5, 0.5, 0.5], 'LineStyle', '--', 'LineWidth', 1);
+            
+            % 设置坐标轴
+            set(gca, 'YTick', y_pos, 'YTickLabel', method_names);
+            xlabel('参数估计值', 'FontSize', 12);
+            title(sprintf('变量 %s 在各方法中的估计及95%%置信区间', var_name), 'FontSize', 14, 'FontWeight', 'bold');
+            grid on;
+            
+            % 保存图形
+            save_figure(fig, figure_dir, sprintf('var_comparison_%s', strrep(var_name, ' ', '_')), 'Formats', {'svg'});
+            log_message('info', sprintf('变量 %s 的方法比较图已保存', var_name));
+            close(fig);
+        end
+    end
+else
+    log_message('warning', '没有足够的方法有参数统计数据，跳过创建参数比较图');
+end
+end
+
 % 方法间比较：为每个参数创建箱线图比较不同方法
 function create_methods_comparison_boxplot(results, methods, var_names, figure_dir)
     % 创建各方法共有变量的比较箱线图
@@ -4315,7 +4471,7 @@ function save_enhanced_results(results, var_names, group_means, cv_results, coef
             create_parameter_comparison_across_methods_plot(param_stats, methods, figure_dir);
             log_message('info', '各方法参数比较图已保存');
         catch ME
-            log_mesagge('error', sprintf('创建各方法参数比较图时出错: %s', ME.message));
+            log_message('error', sprintf('创建各方法参数比较图时出错: %s', ME.message));
         end
     end
 
@@ -4428,7 +4584,7 @@ function save_enhanced_results(results, var_names, group_means, cv_results, coef
             log_message('error', sprintf('创建参数稳定性比较箱线图时出错: %s', ME.message));
         end
     end
-    
+
     %% 3. 创建综合比较报告
     report_path = fullfile(report_dir, 'enhanced_summary_report.txt');
     if ~exist(report_path, 'file')

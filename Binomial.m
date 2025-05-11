@@ -2566,201 +2566,146 @@ upper = prctile(theta_boot, 100 * alpha_2_adj);
 end
 
 % 参数估计值及其置信区间的森林图（Forest Plot）
-function create_parameter_comparison_across_methods(results, methods, figure_dir)
-% 创建不同方法之间的参数比较森林图
-% 输入:
-%   results - 结果结构
-%   methods - 方法名称
-%   figure_dir - 图形保存目录
-
-try
-    % 提取参数统计信息
-    all_data = struct('method', {}, 'var', {}, 'estimate', {}, 'ci_lower', {}, 'ci_upper', {}, 'p_value', {});
-    colors = lines(length(methods));
-
+function create_parameter_comparison_across_methods(param_stats, methods, figure_dir)
+    % 创建森林图（参数估计及其置信区间）
+    % 输入:
+    %   param_stats - 参数统计结果
+    %   methods - 方法名称
+    %   figure_dir - 图形保存目录
+    
+    % 选择一个最佳方法来创建森林图（通常是stepwise或elasticnet）
+    viable_methods = {};
+    method_data = {};
+    
+    % 收集可用的方法数据
     for i = 1:length(methods)
         method = methods{i};
-        
-        % 检查该方法是否有参数统计
-        if isfield(results, method) && isfield(results.(method), 'params')
-            % 获取该方法的参数统计
-            models = results.(method).models;
-            
-            % 获取最常见组合模型的索引
-            var_combinations = results.(method).var_combinations;
-            combo_strings = cellfun(@(x) sprintf('%d,', sort(x)), var_combinations, 'UniformOutput', false);
-            [unique_combos, ~, ic] = unique(combo_strings);
-            combo_counts = accumarray(ic, 1);
-            [~, max_idx] = max(combo_counts);
-            combo_indices = find(ic == max_idx);
-            
-            % 提取模型参数
-            for j = 1:min(3, length(combo_indices)) % 限制为每个方法最多3个模型
-                mdl_idx = combo_indices(j);
-                if mdl_idx <= length(models)
-                    mdl = models{mdl_idx};
-                    
-                    % 提取参数
-                    try
-                        if isa(mdl, 'TreeBagger')
-                            continue; % 跳过随机森林模型
-                        elseif isa(mdl, 'GeneralizedLinearModel')
-                            coefs = mdl.Coefficients;
-                            est = coefs.Estimate;
-                            stderr = coefs.SE;
-                            pval = coefs.pValue;
-                            
-                            % 计算置信区间
-                            tval = tinv(0.975, mdl.DFE);
-                            ci_lo = est - tval * stderr;
-                            ci_hi = est + tval * stderr;
-                            
-                            % 获取变量名
-                            var_list = coefs.Properties.RowNames;
-                            
-                            % 添加到结构体
-                            for k = 1:length(est)
-                                data_item = struct('method', method, ...
-                                                   'var', var_list{k}, ...
-                                                   'estimate', est(k), ...
-                                                   'ci_lower', ci_lo(k), ...
-                                                   'ci_upper', ci_hi(k), ...
-                                                   'p_value', pval(k));
-                                all_data(end+1) = data_item;
-                            end
-                        else
-                            continue; % 跳过其他类型的模型
-                        end
-                    catch ME
-                        log_message('warning', sprintf('提取模型参数失败: %s', ME.message));
-                        continue;
-                    end
+        if isfield(param_stats, method) && isfield(param_stats.(method), 'table') && ...
+           height(param_stats.(method).table) >= 3  % 至少需要截距+2个变量
+            viable_methods{end+1} = method;
+            method_data{end+1} = param_stats.(method);
+        end
+    end
+    
+    % 如果没有可用方法，尝试放宽条件
+    if isempty(viable_methods) && length(methods) > 0
+        for i = 1:length(methods)
+            method = methods{i};
+            if isfield(param_stats, method) && isfield(param_stats.(method), 'variables')
+                if length(param_stats.(method).variables) >= 2  % 至少需要截距+1个变量
+                    viable_methods{end+1} = method;
+                    method_data{end+1} = param_stats.(method);
                 end
             end
         end
     end
-
-    % 如果没有收集到数据，则退出
-    if isempty(all_data)
+    
+    % 如果仍然没有可用方法，记录警告并退出
+    if isempty(viable_methods)
         log_message('warning', '没有足够的参数数据来创建森林图');
         return;
     end
-
-    % 转换为数组格式
-    method_names = {all_data.method};
-    var_names = {all_data.var};
-    estimates = [all_data.estimate];
-    ci_lower = [all_data.ci_lower];
-    ci_upper = [all_data.ci_upper];
-    p_values = [all_data.p_value];
-
-    % 获取唯一变量列表
-    unique_vars = unique(var_names);
-    n_vars = length(unique_vars);
-
-    % 创建森林图
-    fig = figure('Name', 'Parameter Comparison Across Methods', 'Position', [100, 100, 1000, 800]);
-
-    % 准备绘图数据
-    plot_data = [];  % 每行: [y_pos, estimate, ci_lower, ci_upper, method_idx]
-
-    % 从下到上排列变量
-    current_y = 1;
-    var_y_positions = zeros(1, n_vars);
-    method_color_idx = zeros(length(method_names), 1);
-
-    % 为每个变量创建一组点
-    for v = 1:n_vars
-        var_name = unique_vars{v};
-        var_indices = find(strcmp(var_names, var_name));
-        
-        % 记录变量的Y位置
-        var_y_positions(v) = current_y;
-        
-        % 为该变量的每个方法创建一个点
-        for idx = 1:length(var_indices)
-            i = var_indices(idx);
-            
-            % 找出方法的索引
-            method_idx = find(strcmp(methods, method_names{i}));
-            if isempty(method_idx)
-                method_idx = length(methods) + 1;  % 如果找不到，使用额外的颜色
-            end
-            method_color_idx(i) = method_idx;
-            
-            % 添加点
-            point_y = current_y;
-            plot_data(end+1, :) = [point_y, estimates(i), ci_lower(i), ci_upper(i), method_idx];
-            
-            % 增加Y位置
-            current_y = current_y + 0.2;
-        end
-        
-        % 增加组间间隔
-        current_y = current_y + 0.8;
-    end
-
-    % 绘制森林图
-    subplot('Position', [0.25, 0.1, 0.7, 0.8]);
-    hold on;
-
-    % 绘制零线
-    line([0, 0], [0, current_y], 'Color', [0.5, 0.5, 0.5], 'LineStyle', '--', 'LineWidth', 1);
-
-    % 绘制每个点和置信区间
-    for i = 1:size(plot_data, 1)
-        y_pos = plot_data(i, 1);
-        est = plot_data(i, 2);
-        ci_lo = plot_data(i, 3);
-        ci_hi = plot_data(i, 4);
-        m_idx = plot_data(i, 5);
-        
-        % 获取颜色
-        if m_idx <= length(methods)
-            color = colors(m_idx, :);
+    
+    % 使用第一个可行方法创建森林图
+    method = viable_methods{1};
+    params = method_data{1};
+    
+    % 准备森林图数据
+    var_names = params.variables;
+    estimates = params.mean;
+    
+    % 获取置信区间
+    % 优先使用t分布CI，其次使用BCa CI
+    if isfield(params, 't_ci_lower') && isfield(params, 't_ci_upper')
+        ci_lower = params.t_ci_lower;
+        ci_upper = params.t_ci_upper;
+        ci_type = 't分布';
+    elseif isfield(params, 'bca_ci_lower') && isfield(params, 'bca_ci_upper')
+        ci_lower = params.bca_ci_lower;
+        ci_upper = params.bca_ci_upper;
+        ci_type = 'BCa Bootstrap';
+    else
+        % 如果没有CI，使用标准差创建一个基本的CI
+        if isfield(params, 'std')
+            std_vals = params.std;
+            ci_lower = estimates - 1.96 * std_vals;
+            ci_upper = estimates + 1.96 * std_vals;
+            ci_type = '基于标准差的近似';
         else
-            color = [0.5, 0.5, 0.5];  % 默认灰色
+            % 如果连标准差都没有，无法创建森林图
+            log_message('warning', '没有足够的参数置信区间数据来创建森林图');
+            return;
         end
-        
-        % 绘制中心点
-        plot(est, y_pos, 'o', 'MarkerSize', 8, 'MarkerFaceColor', color, 'MarkerEdgeColor', 'none');
-        
-        % 绘制置信区间线
-        line([ci_lo, ci_hi], [y_pos, y_pos], 'Color', color, 'LineWidth', 2);
-        
-        % 绘制端点
-        line([ci_lo, ci_lo], [y_pos-0.05, y_pos+0.05], 'Color', color, 'LineWidth', 2);
-        line([ci_hi, ci_hi], [y_pos-0.05, y_pos+0.05], 'Color', color, 'LineWidth', 2);
     end
-
-    % 设置Y轴标签
-    yticks = var_y_positions;
-    set(gca, 'YTick', yticks, 'YTickLabel', unique_vars, 'FontSize', 10);
-
-    % 设置X轴和标题
-    xlabel('参数估计值及95%置信区间', 'FontSize', 12, 'FontWeight', 'bold');
-    title('不同方法之间的参数比较', 'FontSize', 14, 'FontWeight', 'bold');
     
-    % 添加方法图例
-    legend_handles = [];
-    legend_labels = {};
-    for i = 1:length(methods)
-        h = plot(NaN, NaN, 'o', 'MarkerSize', 8, 'MarkerFaceColor', colors(i,:), 'MarkerEdgeColor', 'none');
-        legend_handles = [legend_handles, h];
-        legend_labels{end+1} = methods{i};
+    % 获取p值和显著性
+    if isfield(params, 'p_values')
+        p_values = params.p_values;
+        
+        % 创建显著性标记
+        significance = cell(size(p_values));
+        for i = 1:length(p_values)
+            if p_values(i) < 0.001
+                significance{i} = '***';
+            elseif p_values(i) < 0.01
+                significance{i} = '**';
+            elseif p_values(i) < 0.05
+                significance{i} = '*';
+            elseif p_values(i) < 0.1
+                significance{i} = '.';
+            else
+                significance{i} = '';
+            end
+        end
+    else
+        p_values = nan(size(estimates));
+        significance = repmat({''}, size(estimates));
     end
-    legend(legend_handles, legend_labels, 'Location', 'best', 'FontSize', 10);
-
+    
+    % 创建森林图
+    fig = figure('Name', 'Forest Plot', 'Position', [100, 100, 1200, max(600, 100 + 30*length(var_names))]);
+    
+    % 计算Y轴位置
+    y_pos = length(var_names):-1:1;
+    
+    % 绘制森林图
+    hold on;
+    
+    % 绘制置信区间线
+    for i = 1:length(var_names)
+        plot([ci_lower(i), ci_upper(i)], [y_pos(i), y_pos(i)], 'b-', 'LineWidth', 1.5);
+    end
+    
+    % 绘制估计点
+    scatter(estimates, y_pos, 100, 'filled', 'MarkerEdgeColor', 'k', 'MarkerFaceColor', 'b');
+    
+    % 添加参数标签
+    for i = 1:length(var_names)
+        text(min(ci_lower) - abs(min(ci_lower))*0.15, y_pos(i), var_names{i}, ...
+            'HorizontalAlignment', 'right', 'FontSize', 10, 'FontWeight', 'bold');
+        
+        % 添加估计值和CI
+        ci_text = sprintf('%.3f [%.3f, %.3f] %s', estimates(i), ci_lower(i), ci_upper(i), significance{i});
+        text(max(ci_upper) + abs(max(ci_upper))*0.05, y_pos(i), ci_text, ...
+            'HorizontalAlignment', 'left', 'FontSize', 9);
+    end
+    
+    % 添加零线
+    plot([0, 0], [0, length(var_names)+1], 'k--', 'LineWidth', 1);
+    
+    % 设置图形属性
+    ylim([0, length(var_names)+1]);
+    xlim([min(ci_lower) - abs(min(ci_lower))*0.2, max(ci_upper) + abs(max(ci_upper))*0.2]);
+    title(sprintf('%s方法的参数估计值及其%s置信区间', method, ci_type), 'FontSize', 14, 'FontWeight', 'bold');
+    xlabel('参数估计值', 'FontSize', 12);
+    set(gca, 'YTick', []);
+    grid on;
+    box on;
+    
     % 保存图形
-    save_figure(fig, figure_dir, 'parameter_comparison_across_methods', 'Formats', {'svg'});
+    save_figure(fig, figure_dir, 'parameter_comparison_across_methods_plot', 'Formats', {'svg'});
+    log_message('info', '参数估计值及其置信区间森林图（Forest Plot）已保存');
     close(fig);
-    
-    % 记录成功信息
-    log_message('info', '图形已保存: parameter_comparison_across_methods (SVG)');
-catch ME
-    % 记录错误信息
-    log_message('error', sprintf('创建参数估计值及其置信区间森林图（Forest Plot）时出错: %s', ME.message));
-end
 end
 
 % 参数显著性火山图（Volcano Plot）
@@ -3104,335 +3049,416 @@ function create_confidence_interval_comparison(param_stats, methods, figure_dir)
 end
 
 % 参数稳定性热图
-function create_parameter_stability_heatmap(coef_stability, methods, figure_dir)
-% 创建参数稳定性热力图
-% 输入:
-%   coef_stability - 系数稳定性结果
-%   methods - 方法名称
-%   figure_dir - 图形保存目录
-
-try
-    % 收集变量和方法
-    all_vars = {};
+function create_coefficient_variation_heatmap(results, methods, var_names, figure_dir)
+    % 创建系数变异系数热力图
+    % 输入:
+    %   results - 结果结构
+    %   methods - 方法名称
+    %   var_names - 变量名称
+    %   figure_dir - 图形保存目录
+    
+    % 初始化变异系数矩阵和方法列表
     valid_methods = {};
-    cv_data = [];
-
+    cv_matrices = {};
+    
+    % 对每种方法计算变异系数
     for i = 1:length(methods)
         method = methods{i};
         
-        % 检查该方法是否有系数稳定性结果
-        if isfield(coef_stability, method) && isfield(coef_stability.(method), 'table')
-            table_data = coef_stability.(method).table;
+        % 提取性能数据中的系数
+        if isfield(results, method) && isfield(results.(method), 'performance') && ...
+           isfield(results.(method).performance, 'all_coefs')
             
-            % 检查表格中的变量名
-            table_vars = table_data.Properties.VariableNames;
-            log_message('debug', sprintf('方法%s的表格变量名: %s', method, strjoin(table_vars, ', ')));
+            all_coefs = results.(method).performance.all_coefs;
             
-            % 尝试找到包含变异系数的列
-            cv_column = '';
-            for v = 1:length(table_vars)
-                var_name = lower(table_vars{v});
-                if strcmp(var_name, 'cv') || ...
-                   contains(var_name, 'variat') || ...
-                   contains(var_name, 'coef') || ...
-                   contains(var_name, 'variability')
-                    cv_column = table_vars{v};
-                    break;
+            % 确保至少有3个有效系数数组
+            valid_coefs = 0;
+            max_length = 0;
+            
+            % 计算有效系数数量和最大长度
+            for j = 1:length(all_coefs)
+                if ~isempty(all_coefs{j}) && isnumeric(all_coefs{j}) && ~any(isnan(all_coefs{j}))
+                    valid_coefs = valid_coefs + 1;
+                    max_length = max(max_length, length(all_coefs{j}));
                 end
             end
             
-            % 如果找不到CV列，尝试自己计算
-            if isempty(cv_column)
-                % 检查是否有Mean和StdDev列
-                mean_col = '';
-                std_col = '';
+            if valid_coefs >= 3 && max_length > 1
+                % 构建系数矩阵
+                coef_matrix = nan(valid_coefs, max_length);
+                idx = 1;
                 
-                for v = 1:length(table_vars)
-                    var_name = lower(table_vars{v});
-                    if strcmp(var_name, 'mean') || contains(var_name, 'mean') || contains(var_name, 'avg')
-                        mean_col = table_vars{v};
-                    elseif strcmp(var_name, 'stddev') || contains(var_name, 'std') || contains(var_name, 'dev')
-                        std_col = table_vars{v};
-                    end
-                end
-                
-                % 如果找到Mean和StdDev列，计算CV
-                if ~isempty(mean_col) && ~isempty(std_col)
-                    % 添加CV列
-                    means = table_data.(mean_col);
-                    stds = table_data.(std_col);
-                    
-                    % 计算变异系数
-                    cvs = zeros(size(means));
-                    for j = 1:length(means)
-                        if abs(means(j)) > 1e-6
-                            cvs(j) = abs(stds(j) / means(j));
+                for j = 1:length(all_coefs)
+                    if ~isempty(all_coefs{j}) && isnumeric(all_coefs{j}) && ~any(isnan(all_coefs{j}))
+                        % 修正长度不一致的问题
+                        current_coefs = all_coefs{j};
+                        if length(current_coefs) <= max_length
+                            coef_matrix(idx, 1:length(current_coefs)) = current_coefs;
                         else
-                            cvs(j) = 0;
+                            coef_matrix(idx, :) = current_coefs(1:max_length);
                         end
+                        idx = idx + 1;
                     end
-                    
-                    % 添加到表格
-                    table_data.CV = cvs;
-                    cv_column = 'CV';
-                else
-                    % 如果无法计算CV，检查是否有cv字段
-                    if isfield(coef_stability.(method), 'cv')
-                        cvs = coef_stability.(method).cv;
-                        table_data.CV = cvs';  % 转置为列向量
-                        cv_column = 'CV';
+                end
+                
+                % 计算每个变量的均值和标准差
+                coef_mean = nanmean(coef_matrix, 1);
+                coef_std = nanstd(coef_matrix, 0, 1);
+                
+                % 计算变异系数，避免除以零问题
+                coef_cv = zeros(size(coef_mean));
+                for j = 1:length(coef_mean)
+                    if abs(coef_mean(j)) > 1e-6  % 避免除以接近零的值
+                        coef_cv(j) = abs(coef_std(j) / coef_mean(j));
                     else
-                        % 如果仍然找不到，跳过此方法
-                        log_message('warning', sprintf('无法为方法%s找到或计算变异系数', method));
-                        continue;
-                    end
-                end
-            end
-            
-            % 尝试找到变量名列
-            var_column = '';
-            for v = 1:length(table_vars)
-                var_name = lower(table_vars{v});
-                if strcmp(var_name, 'variable') || contains(var_name, 'var') || contains(var_name, 'name') || contains(var_name, 'param')
-                    var_column = table_vars{v};
-                    break;
-                end
-            end
-            
-            % 如果找不到变量名列，检查是否有variables字段
-            if isempty(var_column) && isfield(coef_stability.(method), 'variables')
-                % 直接使用variables字段
-                var_names = coef_stability.(method).variables;
-                
-                % 验证长度匹配
-                if length(var_names) == height(table_data)
-                    % 添加方法
-                    valid_methods{end+1} = method;
-                    
-                    % 收集变量和CV值
-                    for j = 1:length(var_names)
-                        var_name = var_names{j};
-                        
-                        % 如果变量尚未添加，则添加
-                        if ~any(strcmp(all_vars, var_name))
-                            all_vars{end+1} = var_name;
-                        end
-                        
-                        % 找出变量索引
-                        var_idx = find(strcmp(all_vars, var_name));
-                        
-                        % 创建或更新CV值矩阵
-                        if isempty(cv_data)
-                            cv_data = zeros(length(all_vars), length(methods));
-                        elseif size(cv_data, 1) < length(all_vars)
-                            % 扩展矩阵
-                            cv_data(end+1:length(all_vars), :) = 0;
-                        end
-                        
-                        if length(var_idx) == 1 && length(valid_methods) <= size(cv_data, 2)
-                            cv_data(var_idx, length(valid_methods)) = table_data.(cv_column)(j);
+                        if coef_std(j) > 1e-6  % 均值接近零但标准差不小
+                            coef_cv(j) = 999;  % 表示高变异性
+                        else  % 均值和标准差都接近零
+                            coef_cv(j) = 0;    % 表示稳定（都是零）
                         end
                     end
-                else
-                    log_message('warning', sprintf('方法%s的变量数量与表格行数不匹配', method));
-                    continue;
                 end
-            else if ~isempty(var_column)
-                % 使用表格中的变量名列
-                var_names = table_data.(var_column);
                 
-                % 添加方法
+                % 添加到变异系数列表
                 valid_methods{end+1} = method;
+                cv_matrices{end+1} = coef_cv;
                 
-                % 收集变量和CV值
-                for j = 1:length(var_names)
-                    var_name = var_names{j};
-                    
-                    % 如果变量尚未添加，则添加
-                    if ~any(strcmp(all_vars, var_name))
-                        all_vars{end+1} = var_name;
-                    end
-                    
-                    % 找出变量索引
-                    var_idx = find(strcmp(all_vars, var_name));
-                    
-                    % 创建或更新CV值矩阵
-                    if isempty(cv_data)
-                        cv_data = zeros(length(all_vars), length(methods));
-                    elseif size(cv_data, 1) < length(all_vars)
-                        % 扩展矩阵
-                        cv_data(end+1:length(all_vars), :) = 0;
-                    end
-                    
-                    if length(var_idx) == 1 && length(valid_methods) <= size(cv_data, 2)
-                        cv_data(var_idx, length(valid_methods)) = table_data.(cv_column)(j);
-                    end
-                end
+                log_message('info', sprintf('成功为方法%s计算变异系数', method));
             else
-                % 如果找不到变量名列，跳过此方法
-                log_message('warning', sprintf('无法为方法%s找到变量名列', method));
-                continue;
-                end
+                log_message('warning', sprintf('无法为方法%s找到或计算变异系数', method));
             end
+        else
+            log_message('warning', sprintf('无法为方法%s找到或计算变异系数', method));
         end
     end
-
-    % 如果没有收集到数据，则退出
-    if isempty(cv_data) || isempty(valid_methods)
+    
+    % 如果没有有效方法，退出
+    if isempty(valid_methods)
         log_message('warning', '没有足够的系数稳定性数据来创建热力图');
         return;
     end
     
-    % 确保cv_data的大小与all_vars和valid_methods匹配
-    cv_data = cv_data(1:length(all_vars), 1:length(valid_methods));
-
-    % 创建热力图
-    fig = figure('Name', 'Parameter Stability Heatmap', 'Position', [100, 100, 1000, 800]);
-
-    % 绘制热力图
-    h = heatmap(valid_methods, all_vars, cv_data);
-
-    % 设置热力图属性
-    h.Title = '参数稳定性热力图 (变异系数 CV)';
-    h.XLabel = '方法';
-    h.YLabel = '变量';
-    h.FontSize = 10;
-
-    % 使用正确的格式化字符串
-    h.CellLabelFormat = '%.2f';
-
-    % 设置颜色映射
-    colormap(jet);
-    caxis([0, 1]); % 设置色条范围
-
-    % 添加颜色条
-    c = colorbar;
-    c.Label.String = '变异系数 (CV)';
-
-    % 保存图形
-    save_figure(fig, figure_dir, 'parameter_stability_heatmap', 'Formats', {'svg'});
-    close(fig);
-    
-    % 记录成功信息
-    log_message('info', '图形已保存: parameter_stability_heatmap (SVG)');
-catch ME
-    % 记录错误信息和堆栈
-    log_message('error', sprintf('创建参数稳定性热力图时出错: %s', ME.message));
-    for i = 1:length(ME.stack)
-        log_message('debug', sprintf('  %s, 行 %d', ME.stack(i).name, ME.stack(i).line));
-    end
-end
-end
-
-% 创建参数估计箱线图
-function create_parameter_boxplot(param_stats, methods, figure_dir)
-    % 创建参数估计箱线图
-    % 输入:
-    %   param_stats - 参数统计结果
-    %   methods - 方法名称
-    %   figure_dir - 图形保存目录
-    
-    % 1. 方法间比较：为每个参数创建箱线图比较不同方法
-    create_methods_comparison_boxplot(param_stats, methods, figure_dir);
-    
-    % 2. 参数稳定性比较：为每个方法创建所有参数的稳定性箱线图
-    create_parameter_stability_boxplot(param_stats, methods, figure_dir);
-end
-
-function create_methods_comparison_boxplot(param_stats, methods, figure_dir)
-    % 收集所有方法中共有的变量
-    common_vars = {};
-    all_variables = {};
-    
-    % 收集所有变量
-    for m = 1:length(methods)
-        method = methods{m};
-        if isfield(param_stats, method) && isfield(param_stats.(method), 'all_coefs')
-            all_variables = union(all_variables, param_stats.(method).variables);
+    % 创建简化的变量名称列表（截断过长的名称）
+    short_var_names = cell(size(var_names));
+    for i = 1:length(var_names)
+        if length(var_names{i}) > 15
+            short_var_names{i} = [var_names{i}(1:12) '...'];
+        else
+            short_var_names{i} = var_names{i};
         end
     end
     
-    % 找出所有方法都有的变量（交集）
-    if ~isempty(all_variables)
-        common_vars = all_variables;
-        for m = 1:length(methods)
-            method = methods{m};
-            if isfield(param_stats, method) && isfield(param_stats.(method), 'variables')
-                common_vars = intersect(common_vars, param_stats.(method).variables);
+    % 创建热力图
+    fig = figure('Name', 'Coefficient Variation Heatmap', 'Position', [100, 100, 1000, 800]);
+    
+    % 确定CV矩阵的最大尺寸
+    max_cols = 0;
+    for i = 1:length(cv_matrices)
+        max_cols = max(max_cols, length(cv_matrices{i}));
+    end
+    
+    % 创建热力图数据
+    heatmap_data = nan(length(valid_methods), max_cols);
+    
+    for i = 1:length(valid_methods)
+        cv = cv_matrices{i};
+        heatmap_data(i, 1:length(cv)) = cv;
+    end
+    
+    % 限制最大CV值，避免极端值影响颜色比例
+    heatmap_data(heatmap_data > 2) = 2;
+    
+    % 创建变量标签
+    var_labels = cell(1, max_cols);
+    var_labels{1} = 'Intercept';
+    for i = 2:max_cols
+        if i-1 <= length(short_var_names)
+            var_labels{i} = short_var_names{i-1};
+        else
+            var_labels{i} = sprintf('Var%d', i-1);
+        end
+    end
+    
+    % 创建热力图
+    imagesc(heatmap_data);
+    colormap(jet);
+    colorbar;
+    
+    % 设置轴标签
+    set(gca, 'XTick', 1:max_cols, 'XTickLabel', var_labels, 'XTickLabelRotation', 45);
+    set(gca, 'YTick', 1:length(valid_methods), 'YTickLabel', valid_methods);
+    
+    % 设置标题和标签
+    title('各方法参数变异系数 (CV) 热力图', 'FontSize', 14, 'FontWeight', 'bold');
+    xlabel('变量', 'FontSize', 12);
+    ylabel('方法', 'FontSize', 12);
+    
+    % 给每个单元格添加CV值
+    for i = 1:length(valid_methods)
+        for j = 1:max_cols
+            if ~isnan(heatmap_data(i, j))
+                text(j, i, sprintf('%.2f', heatmap_data(i, j)), ...
+                    'HorizontalAlignment', 'center', 'FontSize', 8);
             end
         end
     end
     
-    % 如果没有共有变量，退出
+    % 调整图形大小
+    set(gcf, 'Position', [100, 100, max(1000, 200 + 40*max_cols), max(800, 150 + 40*length(valid_methods))]);
+    
+    % 保存图形
+    save_figure(fig, figure_dir, 'coefficient_variation_heatmap', 'Formats', {'svg'});
+    log_message('info', '参数稳定性热力图已保存');
+    close(fig);
+end
+
+% 方法间比较：为每个参数创建箱线图比较不同方法
+function create_methods_comparison_boxplot(results, methods, var_names, figure_dir)
+    % 创建各方法共有变量的比较箱线图
+    % 输入:
+    %   results - 结果结构
+    %   methods - 方法名称
+    %   var_names - 变量名称
+    %   figure_dir - 图形保存目录
+    
+    % 收集每种方法选择的变量
+    selected_vars_by_method = cell(length(methods), 1);
+    
+    for i = 1:length(methods)
+        method = methods{i};
+        if isfield(results, method) && isfield(results.(method), 'selected_vars')
+            selected_vars_by_method{i} = find(results.(method).selected_vars);
+        else
+            selected_vars_by_method{i} = [];
+        end
+    end
+    
+    % 找出所有方法共有的变量
+    common_vars = [];
+    if ~isempty(selected_vars_by_method) && ~isempty(selected_vars_by_method{1})
+        common_vars = selected_vars_by_method{1};
+        
+        for i = 2:length(methods)
+            if ~isempty(selected_vars_by_method{i})
+                common_vars = intersect(common_vars, selected_vars_by_method{i});
+            end
+        end
+    end
+    
+    % 如果没有共有变量，尝试放宽条件，找出至少有两种方法共有的变量
+    if isempty(common_vars)
+        all_vars = [];
+        for i = 1:length(methods)
+            all_vars = union(all_vars, selected_vars_by_method{i});
+        end
+        
+        var_count = zeros(length(all_vars), 1);
+        for i = 1:length(methods)
+            for j = 1:length(all_vars)
+                if any(selected_vars_by_method{i} == all_vars(j))
+                    var_count(j) = var_count(j) + 1;
+                end
+            end
+        end
+        
+        % 选择出现在至少两种方法中的变量
+        common_vars = all_vars(var_count >= 2);
+    end
+    
+    % 如果仍然没有共有变量，使用变量频率最高的前5个变量
+    if isempty(common_vars)
+        % 计算每个变量的选择频率
+        var_freq = zeros(length(var_names), 1);
+        for i = 1:length(methods)
+            method = methods{i};
+            if isfield(results, method) && isfield(results.(method), 'var_freq')
+                var_freq = var_freq + results.(method).var_freq;
+            end
+        end
+        
+        % 选择频率最高的前5个变量
+        [~, idx] = sort(var_freq, 'descend');
+        common_vars = idx(1:min(5, length(idx)));
+    end
+    
+    % 如果仍然没有共有变量，无法创建boxplot
     if isempty(common_vars)
         log_message('warning', '没有找到所有方法共有的变量，无法创建方法比较箱线图');
         return;
     end
     
-    % 为每个共有变量创建方法比较箱线图
-    for v = 1:length(common_vars)
-        var_name = common_vars{v};
+    % 收集各方法中这些变量的系数
+    coefs_by_method = cell(length(methods), length(common_vars));
+    
+    for i = 1:length(methods)
+        method = methods{i};
         
-        % 收集不同方法对该变量的参数估计
-        param_values = cell(length(methods), 1);
-        method_names = cell(length(methods), 1);
-        valid_methods = 0;
-        
-        for m = 1:length(methods)
-            method = methods{m};
+        % 提取性能数据中的系数
+        if isfield(results, method) && isfield(results.(method), 'performance') && ...
+           isfield(results.(method).performance, 'all_coefs')
             
-            if isfield(param_stats, method) && isfield(param_stats.(method), 'all_coefs')
-                var_idx = find(strcmp(param_stats.(method).variables, var_name));
-                
-                if ~isempty(var_idx) && isfield(param_stats.(method), 'all_coefs')
-                    % 收集所有模型中该变量的系数估计
-                    all_coefs = param_stats.(method).all_coefs;
-                    coef_values = [];
+            all_coefs = results.(method).performance.all_coefs;
+            
+            % 遍历所有系数样本
+            for j = 1:length(all_coefs)
+                if ~isempty(all_coefs{j}) && isnumeric(all_coefs{j})
+                    coef = all_coefs{j};
                     
-                    % 从所有模型中提取该变量的参数值
-                    for i = 1:length(all_coefs)
-                        if length(all_coefs{i}) >= var_idx
-                            coef_values(end+1) = all_coefs{i}(var_idx);
+                    % 对于每个共有变量
+                    for k = 1:length(common_vars)
+                        var_idx = common_vars(k);
+                        
+                        % 检查变量索引是否在系数范围内
+                        % 注意系数可能包含截距，所以变量索引需要+1
+                        if var_idx + 1 <= length(coef)
+                            if isempty(coefs_by_method{i, k})
+                                coefs_by_method{i, k} = coef(var_idx + 1);
+                            else
+                                coefs_by_method{i, k} = [coefs_by_method{i, k}; coef(var_idx + 1)];
+                            end
                         end
-                    end
-                    
-                    if ~isempty(coef_values)
-                        valid_methods = valid_methods + 1;
-                        param_values{valid_methods} = coef_values;
-                        method_names{valid_methods} = method;
                     end
                 end
             end
         end
+    end
+    
+    % 检查是否有足够的数据
+    has_data = false;
+    for i = 1:length(methods)
+        for j = 1:length(common_vars)
+            if ~isempty(coefs_by_method{i, j}) && length(coefs_by_method{i, j}) >= 3
+                has_data = true;
+                break;
+            end
+        end
+        if has_data
+            break;
+        end
+    end
+    
+    if ~has_data
+        log_message('warning', '没有足够的系数数据来创建方法比较箱线图');
+        return;
+    end
+    
+    % 为每个共有变量创建一个boxplot
+    for k = 1:length(common_vars)
+        var_idx = common_vars(k);
+        var_name = '';
         
-        % 调整数组大小以匹配有效方法数量
-        param_values = param_values(1:valid_methods);
-        method_names = method_names(1:valid_methods);
+        % 获取变量名称
+        if var_idx <= length(var_names)
+            var_name = var_names{var_idx};
+        else
+            var_name = sprintf('Var%d', var_idx);
+        end
         
-        % 如果至少有两种方法有该变量，创建箱线图
-        if valid_methods >= 2
-            fig = figure('Name', sprintf('Parameter Boxplot - %s', var_name), 'Position', [100, 100, 800, 600]);
-            
+        % 收集该变量的所有系数
+        var_coefs = [];
+        var_methods = {};
+        
+        for i = 1:length(methods)
+            if ~isempty(coefs_by_method{i, k}) && length(coefs_by_method{i, k}) >= 3
+                var_coefs = [var_coefs; coefs_by_method{i, k}];
+                var_methods = [var_methods; repmat({methods{i}}, length(coefs_by_method{i, k}), 1)];
+            end
+        end
+        
+        if ~isempty(var_coefs)
             % 创建箱线图
-            boxplot(cell2mat(param_values'), 'Labels', method_names, 'Notch', 'on');
+            fig = figure('Name', sprintf('Variable Comparison: %s', var_name), 'Position', [100, 100, 800, 600]);
+            
+            boxplot(var_coefs, var_methods, 'Notch', 'on');
             
             % 设置图形属性
-            title(sprintf('变量 "%s" 在不同方法下的参数估计分布', var_name), 'FontSize', 14, 'FontWeight', 'bold');
+            title(sprintf('变量 %s 在各方法中的系数分布', var_name), 'FontSize', 14, 'FontWeight', 'bold');
+            ylabel('系数值', 'FontSize', 12);
             xlabel('方法', 'FontSize', 12);
-            ylabel('参数估计值', 'FontSize', 12);
             grid on;
             
-            % 添加零线
+            % 添加均值点
             hold on;
-            line([0, valid_methods+1], [0, 0], 'LineStyle', '--', 'Color', 'k');
+            methods_unique = unique(var_methods);
+            for i = 1:length(methods_unique)
+                method = methods_unique{i};
+                method_coefs = var_coefs(strcmp(var_methods, method));
+                
+                % 计算均值和95%置信区间
+                mean_val = mean(method_coefs);
+                [~, ci_lower, ci_upper] = ttest(method_coefs);
+                
+                % 绘制均值点
+                scatter(i, mean_val, 100, 'filled', 'MarkerEdgeColor', 'k', 'MarkerFaceColor', 'r');
+                
+                % 添加均值标签
+                text(i, max(method_coefs) + 0.1*range(var_coefs), ...
+                    sprintf('均值: %.3f\n95%%CI: [%.3f, %.3f]', mean_val, ci_lower, ci_upper), ...
+                    'HorizontalAlignment', 'center', 'FontSize', 8);
+            end
+            
+            % 添加零线
+            plot(xlim, [0, 0], 'k--', 'LineWidth', 1);
             
             % 保存图形
-            save_figure(fig, figure_dir, sprintf('parameter_boxplot_%s', strrep(var_name, ' ', '_')), 'Formats', {'svg'});
+            save_figure(fig, figure_dir, sprintf('var_comparison_%s', strrep(var_name, ' ', '_')), 'Formats', {'svg'});
             close(fig);
         end
     end
+    
+    % 创建汇总比较图
+    fig = figure('Name', 'Methods Comparison Summary', 'Position', [100, 100, 1200, 800]);
+    
+    % 收集每个方法的平均系数
+    n_methods = length(methods);
+    n_vars = length(common_vars);
+    
+    mean_coefs = nan(n_methods, n_vars);
+    
+    for i = 1:n_methods
+        for j = 1:n_vars
+            if ~isempty(coefs_by_method{i, j})
+                mean_coefs(i, j) = mean(coefs_by_method{i, j}, 'omitnan');
+            end
+        end
+    end
+    
+    % 创建柱状图
+    bar_h = bar(mean_coefs);
+    
+    % 设置图形属性
+    var_names_short = cell(size(common_vars));
+    for i = 1:length(common_vars)
+        if common_vars(i) <= length(var_names)
+            var_name = var_names{common_vars(i)};
+            if length(var_name) > 15
+                var_names_short{i} = [var_name(1:12) '...'];
+            else
+                var_names_short{i} = var_name;
+            end
+        else
+            var_names_short{i} = sprintf('Var%d', common_vars(i));
+        end
+    end
+    
+    legend(var_names_short, 'Location', 'best');
+    
+    % 设置x轴标签
+    set(gca, 'XTick', 1:n_methods, 'XTickLabel', methods);
+    
+    % 设置标题和标签
+    title('各方法中共有变量的平均系数比较', 'FontSize', 14, 'FontWeight', 'bold');
+    ylabel('平均系数值', 'FontSize', 12);
+    xlabel('方法', 'FontSize', 12);
+    grid on;
+    
+    % 保存图形
+    save_figure(fig, figure_dir, 'method_comparison_summary', 'Formats', {'svg'});
+    log_message('info', '参数统计箱线图已保存');
+    close(fig);
 end
 
+% 参数稳定性比较：为每个方法创建所有参数的稳定性箱线图
 function create_parameter_stability_boxplot(param_stats, methods, figure_dir)
     % 为每个方法创建参数稳定性箱线图
     for m = 1:length(methods)
@@ -4308,7 +4334,7 @@ function save_enhanced_results(results, var_names, group_means, cv_results, coef
     figure_path = fullfile(figure_dir, 'parameter_stability_heatmap.svg');
     if ~exist(figure_path, 'file')
         try
-            create_parameter_stability_heatmap(param_stats, methods, figure_dir);
+            create_coefficient_variation_heatmap(results, methods, var_names, figure_dir)
             log_message('info', '参数稳定性热力图已保存');
         catch ME
             log_message('error', sprintf('创建参数稳定性热力图时出错: %s', ME.message));
@@ -4381,6 +4407,28 @@ function save_enhanced_results(results, var_names, group_means, cv_results, coef
         end
     end
 
+    % 方法间参数比较箱线图
+    figure_path = fullfile(figure_dir, 'methods_comparison_boxplot.svg');
+    if ~exist(figure_path, 'file')
+        try
+            create_methods_comparison_boxplot(results, methods, var_names, figure_dir);
+            log_message('info', '方法间参数比较箱线图已保存');
+        catch ME
+            log_message('error', sprintf('创建方法间参数比较箱线图时出错: %s', ME.message));
+        end
+    end
+
+    % 参数稳定性比较箱线图
+    figure_path = fullfile(figure_dir, 'parameter_stability_boxplot.svg');
+    if ~exist(figure_path, 'file')
+        try
+            create_parameter_stability_boxplot(param_stats, methods, figure_dir);
+            log_message('info', '参数稳定性比较箱线图已保存');
+        catch ME
+            log_message('error', sprintf('创建参数稳定性比较箱线图时出错: %s', ME.message));
+        end
+    end
+    
     %% 3. 创建综合比较报告
     report_path = fullfile(report_dir, 'enhanced_summary_report.txt');
     if ~exist(report_path, 'file')
